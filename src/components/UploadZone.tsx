@@ -1,0 +1,489 @@
+import { useCallback, useRef, useState, useEffect } from "react";
+import type { ConversionState } from "../App";
+import { getAcceptTypes, inferFormatFromFile, supportsMultiFileConvert } from "../data/catalog";
+import type { Operation } from "../data/catalog";
+import { useI18n } from "../i18n/I18nContext";
+import { OCR_LANG_OPTIONS, TRANSLATE_LANG_OPTIONS } from "../i18n/languages";
+import FileJobWorkspace from "./FileJobWorkspace";
+import AddFilesMenu, { type CloudProvider } from "./AddFilesMenu";
+import CloudSetupModal from "./CloudSetupModal";
+import SelectDropdown from "./SelectDropdown";
+import ConversionPreviewModal from "./ConversionPreviewModal";
+import {
+  type ConversionResultInfo,
+  downloadConversionResult,
+} from "./ConversionResultBar";
+import { importFromCloud, isCloudConfigured } from "../utils/cloudImport";
+
+const OUTPUT_FORMAT_OPTIONS = [
+  { code: "txt", label: "TXT" },
+  { code: "docx", label: "DOCX" },
+];
+
+interface UploadZoneProps {
+  operation: Operation;
+  fromFormat: string;
+  toFormat: string;
+  selectedFiles: File[];
+  onFilesSelect: (files: File[]) => void;
+  status: ConversionState;
+  error: string | null;
+  onStatusChange: (s: ConversionState) => void;
+  onError: (e: string | null) => void;
+  onToFormatChange?: (fmt: string) => void;
+}
+
+const labelClass = "text-[rgb(var(--muted))]";
+
+export default function UploadZone({
+  operation,
+  fromFormat,
+  toFormat,
+  selectedFiles,
+  onFilesSelect,
+  status,
+  error,
+  onStatusChange,
+  onError,
+  onToFormatChange,
+}: UploadZoneProps) {
+  const { t } = useI18n();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<string | null>(
+    toFormat !== "any" ? toFormat : operation === "ocr" || operation === "translate" ? "txt" : null
+  );
+  const [urlInput, setUrlInput] = useState("");
+  const [showUrl, setShowUrl] = useState(false);
+  const [ocrLang, setOcrLang] = useState("eng");
+  const [translateFrom, setTranslateFrom] = useState("auto");
+  const [translateTo, setTranslateTo] = useState("en");
+  const [translateProgress, setTranslateProgress] = useState<{
+    phase: string;
+    done: number;
+    total: number;
+  } | null>(null);
+  const [cloudSetup, setCloudSetup] = useState<CloudProvider | null>(null);
+  const [conversionResult, setConversionResult] = useState<ConversionResultInfo | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const effectiveTo =
+    operation === "ocr" || operation === "translate"
+      ? outputFormat || "txt"
+      : toFormat === "any"
+        ? outputFormat
+        : toFormat;
+  const multiSelect =
+    operation === "merge" ||
+    operation === "create-archive" ||
+    (operation === "convert" && supportsMultiFileConvert(fromFormat, effectiveTo));
+
+  useEffect(() => {
+    if (toFormat !== "any") {
+      setOutputFormat(toFormat);
+    } else if (operation === "ocr" || operation === "translate") {
+      setOutputFormat("txt");
+    } else if (selectedFiles.length === 0) {
+      setOutputFormat(null);
+    }
+  }, [toFormat, operation, selectedFiles.length]);
+
+  const handleOutputChange = (fmt: string) => {
+    setOutputFormat(fmt);
+    onToFormatChange?.(fmt);
+  };
+
+  const accept = getAcceptTypes(fromFormat, effectiveTo || "docx", operation);
+
+  const handleFiles = useCallback(
+    (files: FileList | File[]) => {
+      const list = Array.from(files);
+      onFilesSelect(multiSelect ? [...selectedFiles, ...list] : list.slice(0, 1));
+      onError(null);
+      onStatusChange("idle");
+      setConversionResult(null);
+      setPreviewOpen(false);
+    },
+    [multiSelect, onFilesSelect, onError, onStatusChange, selectedFiles]
+  );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDragOver(false);
+      if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+    },
+    [handleFiles]
+  );
+
+  const loadFromUrl = async () => {
+    if (!urlInput.trim()) return;
+    onStatusChange("uploading");
+    onError(null);
+    try {
+      const res = await fetch("/api/fetch-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: urlInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to fetch URL");
+      const bin = atob(data.dataUrl.split(",")[1]);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const file = new File([arr], data.name, { type: "application/octet-stream" });
+      handleFiles([file]);
+      setShowUrl(false);
+      setUrlInput("");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "URL fetch failed");
+    } finally {
+      onStatusChange("idle");
+    }
+  };
+
+  const convert = async () => {
+    if (!selectedFiles.length) return;
+    if (operation === "convert" && !effectiveTo) {
+      onError("Please select output format");
+      return;
+    }
+    onStatusChange("converting");
+    onError(null);
+    setConversionResult(null);
+    setPreviewOpen(false);
+
+    const progressId = operation === "translate" ? crypto.randomUUID() : null;
+    if (progressId) {
+      setTranslateProgress({ phase: "extracting", done: 0, total: 0 });
+    }
+
+    const formData = new FormData();
+    formData.append("operation", operation);
+
+    const pdfToImageBatch =
+      operation === "convert" &&
+      supportsMultiFileConvert(fromFormat, effectiveTo!) &&
+      selectedFiles.length > 1;
+    const useMultiUpload =
+      operation === "merge" || operation === "create-archive" || pdfToImageBatch;
+
+    if (useMultiUpload) {
+      selectedFiles.forEach((f) => formData.append("files", f));
+      if (operation === "convert") {
+        formData.append("fromFormat", fromFormat);
+        formData.append("toFormat", effectiveTo!);
+      }
+    } else {
+      formData.append("file", selectedFiles[0]);
+      const actualFrom =
+        fromFormat === "any" || operation === "ocr" || operation === "translate"
+          ? inferFormatFromFile(selectedFiles[0])
+          : fromFormat;
+      formData.append("fromFormat", actualFrom);
+      formData.append("toFormat", effectiveTo!);
+      if (operation === "ocr") formData.append("ocrLang", ocrLang);
+      if (operation === "translate") {
+        formData.append("translateFrom", translateFrom);
+        formData.append("translateTo", translateTo);
+        if (progressId) formData.append("progressId", progressId);
+      }
+    }
+
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    if (progressId) {
+      pollTimer = setInterval(async () => {
+        try {
+          const pr = await fetch(`/api/translate/progress/${progressId}`);
+          if (pr.ok) setTranslateProgress(await pr.json());
+        } catch {
+          /* ignore poll errors */
+        }
+      }, 400);
+    }
+
+    try {
+      const res = await fetch(`/api/convert?operation=${encodeURIComponent(operation)}`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: "Conversion failed" }));
+        throw new Error(data.error || "Conversion failed");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="(.+)"/);
+      const filename = match?.[1] || "converted";
+      const outFmt =
+        effectiveTo ||
+        filename.split(".").pop()?.toLowerCase() ||
+        "bin";
+
+      setConversionResult({
+        blob,
+        filename,
+        size: blob.size,
+        outputFormat: outFmt,
+      });
+      onStatusChange("done");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Conversion failed");
+      onStatusChange("error");
+    } finally {
+      if (pollTimer) clearInterval(pollTimer);
+      setTranslateProgress(null);
+    }
+  };
+
+  const handleCloudImport = async (provider: CloudProvider) => {
+    if (!isCloudConfigured(provider)) {
+      setCloudSetup(provider);
+      onError(null);
+      return;
+    }
+    onError(null);
+    onStatusChange("uploading");
+    try {
+      const file = await importFromCloud(provider);
+      if (file) handleFiles([file]);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Cloud import failed");
+    } finally {
+      onStatusChange("idle");
+    }
+  };
+
+  const cloudModal = (
+    <CloudSetupModal
+      provider={cloudSetup}
+      onClose={() => setCloudSetup(null)}
+      onUseComputer={() => inputRef.current?.click()}
+      onUseUrl={() => setShowUrl(true)}
+    />
+  );
+
+  const hiddenInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept={accept}
+      multiple={multiSelect}
+      className="hidden"
+      onChange={(e) => e.target.files && handleFiles(e.target.files)}
+    />
+  );
+
+  if (selectedFiles.length > 0) {
+    return (
+      <>
+        {hiddenInput}
+        {cloudModal}
+        {showUrl && (
+          <div className="mb-4 flex w-full max-w-md gap-2">
+            <input
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              placeholder="https://example.com/file.pdf"
+              className="flex-1 rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-sm text-white outline-none focus:border-brand"
+            />
+            <button
+              onClick={loadFromUrl}
+              className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+            >
+              {t("load")}
+            </button>
+            <button
+              onClick={() => setShowUrl(false)}
+              className="rounded-lg px-3 py-2 text-sm text-gray-400 hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <FileJobWorkspace
+          operation={operation}
+          files={selectedFiles}
+          outputFormat={outputFormat}
+          onOutputFormatChange={handleOutputChange}
+          onRemoveFile={(i) => {
+            onFilesSelect(selectedFiles.filter((_, j) => j !== i));
+            setConversionResult(null);
+            setPreviewOpen(false);
+            onStatusChange("idle");
+          }}
+          onAddFiles={(files) => handleFiles(files)}
+          onAddUrl={() => setShowUrl(true)}
+          onCloudImport={handleCloudImport}
+          onConvert={convert}
+          status={status}
+          error={error}
+          conversionResult={conversionResult}
+          onDownloadResult={() => conversionResult && downloadConversionResult(conversionResult)}
+          onPreviewResult={() => setPreviewOpen(true)}
+          ocrLang={ocrLang}
+          onOcrLangChange={setOcrLang}
+          translateFrom={translateFrom}
+          translateTo={translateTo}
+          onTranslateFromChange={setTranslateFrom}
+          onTranslateToChange={setTranslateTo}
+          translateProgress={translateProgress}
+          multi={multiSelect}
+        />
+        {conversionResult ? (
+          <ConversionPreviewModal
+            result={conversionResult}
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            onDownload={() => downloadConversionResult(conversionResult)}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {hiddenInput}
+      {cloudModal}
+    <section
+      className={`modern-card relative mb-12 overflow-hidden transition ${
+        dragOver ? "border-brand/60 bg-brand/5 shadow-glow-sm" : ""
+      }`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={onDrop}
+    >
+      <div className="relative px-6 py-16 text-center md:px-12 md:py-20">
+        {/* Cloud upload icon */}
+        <div className="mx-auto mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center">
+          <svg className="h-16 w-16 text-brand" viewBox="0 0 64 64" fill="none" aria-hidden>
+            <path
+              d="M48 28c0-6.627-5.373-12-12-12-1.3 0-2.55.21-3.72.6C30.28 11.24 26.4 8 22 8c-6.627 0-12 5.373-12 12 0 .68.06 1.35.17 2C5.62 22.53 2 27.14 2 32.5 2 39.4 7.6 45 14.5 45H48c5.523 0 10-4.477 10-10s-4.477-10-10-10z"
+              fill="currentColor"
+              opacity="0.9"
+            />
+            <path
+              d="M32 36V24m0 0l-4 4m4-4l4 4"
+              stroke="white"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+
+        <h2 className="mb-2 text-xl font-bold md:text-2xl">{t("selectFileTitle")}</h2>
+        <p className="mb-10 text-[rgb(var(--muted))]">{t("selectFileHint")}</p>
+
+        <div className="flex flex-col items-center gap-4">
+          <AddFilesMenu
+            onAddFiles={() => inputRef.current?.click()}
+            onAddUrl={() => setShowUrl(true)}
+            onCloudImport={handleCloudImport}
+            label={multiSelect ? t("selectFiles") : t("selectFile")}
+            variant="primary"
+            placement="below"
+          />
+
+          {showUrl && (
+            <div className="mt-2 flex w-full max-w-md gap-2">
+              <input
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://example.com/file.pdf"
+                className="flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-brand dark:border-white/15 dark:bg-white/5 dark:text-white"
+              />
+              <button
+                onClick={loadFromUrl}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+              >
+                {t("load")}
+              </button>
+              <button
+                onClick={() => setShowUrl(false)}
+                className="rounded-lg px-3 py-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-white"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
+          {operation === "ocr" && (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <span className={labelClass}>{t("ocrLanguage")}:</span>
+                  <SelectDropdown
+                    value={ocrLang}
+                    onChange={setOcrLang}
+                    options={OCR_LANG_OPTIONS}
+                    ariaLabel="OCR language"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className={labelClass}>{t("outputFormat")}:</span>
+                  <SelectDropdown
+                    value={outputFormat || "txt"}
+                    onChange={handleOutputChange}
+                    options={OUTPUT_FORMAT_OPTIONS}
+                    ariaLabel="Output format"
+                  />
+                </label>
+              </div>
+              <p className="max-w-lg text-xs text-gray-500 dark:text-gray-400">
+                Power OCR: 300 DPI, image enhancement, multi-pass Tesseract. May take 30–90s on large PDFs.
+              </p>
+            </div>
+          )}
+
+          {operation === "translate" && (
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-sm">
+                <label className="flex items-center gap-2">
+                  <span className={labelClass}>{t("translateFrom")}:</span>
+                  <SelectDropdown
+                    value={translateFrom}
+                    onChange={setTranslateFrom}
+                    options={TRANSLATE_LANG_OPTIONS}
+                    ariaLabel="Source language"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className={labelClass}>{t("translateTo")}:</span>
+                  <SelectDropdown
+                    value={translateTo}
+                    onChange={setTranslateTo}
+                    options={TRANSLATE_LANG_OPTIONS.filter((l) => l.code !== "auto")}
+                    ariaLabel="Target language"
+                  />
+                </label>
+                <label className="flex items-center gap-2">
+                  <span className={labelClass}>{t("outputFormat")}:</span>
+                  <SelectDropdown
+                    value={outputFormat || "txt"}
+                    onChange={handleOutputChange}
+                    options={OUTPUT_FORMAT_OPTIONS}
+                    ariaLabel="Output format"
+                  />
+                </label>
+              </div>
+              <p className="max-w-md text-xs text-gray-500 dark:text-gray-400">
+                Translation uses Google Translate with automatic fallbacks. OCR is powered by Tesseract on our servers.
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <p className="max-w-md rounded-lg bg-red-500/10 px-4 py-2 text-sm text-red-600 dark:text-red-400">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+    </>
+  );
+}
