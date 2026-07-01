@@ -7,3 +7,4 @@ server/data/
 eng.traineddata
 __pycache__/
 *.pyc
+scripts/.tmp-*/

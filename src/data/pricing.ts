@@ -96,7 +96,7 @@ export interface FeatureRow {
 export const CREDIT_ROWS: FeatureRow[] = [
   {
     label: "Conversion Credits",
-    free: "10 / day",
+    free: "15 / day",
     package: "slider-package",
     subscription: "slider-subscription",
     enterprise: "Custom",
@@ -220,7 +220,7 @@ export const PRICING_FAQ = [
   },
   {
     q: "How does the Free plan work?",
-    a: "You get 10 free conversions per day without a credit card. Create an account to unlock your dashboard and track usage.",
+    a: "You get 15 free conversions per day without a credit card. Create an account to unlock your dashboard and track usage.",
   },
   {
     q: "What's the difference between Package and Subscription?",

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import type { ConversionState } from "../App";
-import { getAcceptTypes, inferFormatFromFile, supportsMultiFileConvert } from "../data/catalog";
+import { getAcceptTypes, inferFormatFromFile } from "../data/catalog";
 import type { Operation } from "../data/catalog";
 import { useI18n } from "../i18n/I18nContext";
 import { OCR_LANG_OPTIONS, TRANSLATE_LANG_OPTIONS } from "../i18n/languages";
@@ -31,6 +31,7 @@ interface UploadZoneProps {
   onStatusChange: (s: ConversionState) => void;
   onError: (e: string | null) => void;
   onToFormatChange?: (fmt: string) => void;
+  overlapHero?: boolean;
 }
 
 const labelClass = "text-[rgb(var(--muted))]";
@@ -46,6 +47,7 @@ export default function UploadZone({
   onStatusChange,
   onError,
   onToFormatChange,
+  overlapHero,
 }: UploadZoneProps) {
   const { t } = useI18n();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,10 +74,7 @@ export default function UploadZone({
       : toFormat === "any"
         ? outputFormat
         : toFormat;
-  const multiSelect =
-    operation === "merge" ||
-    operation === "create-archive" ||
-    (operation === "convert" && supportsMultiFileConvert(fromFormat, effectiveTo));
+  const multiSelect = true;
 
   useEffect(() => {
     if (toFormat !== "any") {
@@ -159,28 +158,19 @@ export default function UploadZone({
 
     const formData = new FormData();
     formData.append("operation", operation);
+    selectedFiles.forEach((f) => formData.append("files", f));
 
-    const pdfToImageBatch =
-      operation === "convert" &&
-      supportsMultiFileConvert(fromFormat, effectiveTo!) &&
-      selectedFiles.length > 1;
-    const useMultiUpload =
-      operation === "merge" || operation === "create-archive" || pdfToImageBatch;
+    const actualFrom =
+      fromFormat === "any" || operation === "ocr" || operation === "translate"
+        ? inferFormatFromFile(selectedFiles[0])
+        : fromFormat;
 
-    if (useMultiUpload) {
-      selectedFiles.forEach((f) => formData.append("files", f));
-      if (operation === "convert") {
-        formData.append("fromFormat", fromFormat);
-        formData.append("toFormat", effectiveTo!);
-      }
-    } else {
-      formData.append("file", selectedFiles[0]);
-      const actualFrom =
-        fromFormat === "any" || operation === "ocr" || operation === "translate"
-          ? inferFormatFromFile(selectedFiles[0])
-          : fromFormat;
+    if (operation === "convert") {
       formData.append("fromFormat", actualFrom);
       formData.append("toFormat", effectiveTo!);
+    } else if (operation !== "merge" && operation !== "create-archive") {
+      formData.append("fromFormat", actualFrom);
+      if (effectiveTo) formData.append("toFormat", effectiveTo);
       if (operation === "ocr") formData.append("ocrLang", ocrLang);
       if (operation === "translate") {
         formData.append("translateFrom", translateFrom);
@@ -327,7 +317,6 @@ export default function UploadZone({
           onTranslateFromChange={setTranslateFrom}
           onTranslateToChange={setTranslateTo}
           translateProgress={translateProgress}
-          multi={multiSelect}
         />
         {conversionResult ? (
           <ConversionPreviewModal
@@ -347,8 +336,8 @@ export default function UploadZone({
       {cloudModal}
     <section
       className={`modern-card relative mb-12 overflow-hidden transition ${
-        dragOver ? "border-brand/60 bg-brand/5 shadow-glow-sm" : ""
-      }`}
+        overlapHero ? "home-upload-overlap" : ""
+      } ${dragOver ? "border-brand/60 bg-brand/5 shadow-glow-sm" : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);
@@ -356,10 +345,9 @@ export default function UploadZone({
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      <div className="relative px-6 py-16 text-center md:px-12 md:py-20">
-        {/* Cloud upload icon */}
-        <div className="mx-auto mb-6 flex h-[4.5rem] w-[4.5rem] items-center justify-center">
-          <svg className="h-16 w-16 text-brand" viewBox="0 0 64 64" fill="none" aria-hidden>
+      <div className="relative flex flex-col items-center gap-6 px-6 py-8 text-center">
+        <div className="flex flex-col items-center gap-6">
+          <svg className="h-12 w-12 text-brand" viewBox="0 0 64 64" fill="none" aria-hidden>
             <path
               d="M48 28c0-6.627-5.373-12-12-12-1.3 0-2.55.21-3.72.6C30.28 11.24 26.4 8 22 8c-6.627 0-12 5.373-12 12 0 .68.06 1.35.17 2C5.62 22.53 2 27.14 2 32.5 2 39.4 7.6 45 14.5 45H48c5.523 0 10-4.477 10-10s-4.477-10-10-10z"
               fill="currentColor"
@@ -373,17 +361,19 @@ export default function UploadZone({
               strokeLinejoin="round"
             />
           </svg>
-        </div>
 
-        <h2 className="mb-2 text-xl font-bold md:text-2xl">{t("selectFileTitle")}</h2>
-        <p className="mb-10 text-[rgb(var(--muted))]">{t("selectFileHint")}</p>
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold tracking-tight sm:text-2xl">{t("selectFileTitle")}</h2>
+            <p className="text-[rgb(var(--muted))]">{t("selectFileHint")}</p>
+          </div>
+        </div>
 
         <div className="flex flex-col items-center gap-4">
           <AddFilesMenu
             onAddFiles={() => inputRef.current?.click()}
             onAddUrl={() => setShowUrl(true)}
             onCloudImport={handleCloudImport}
-            label={multiSelect ? t("selectFiles") : t("selectFile")}
+            label={t("selectFiles")}
             variant="primary"
             placement="below"
           />

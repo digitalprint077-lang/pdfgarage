@@ -2,7 +2,6 @@ interface HealthData {
   ok?: boolean;
   libreOffice?: boolean;
   pdf2docx?: boolean;
-  ffmpeg?: boolean;
   tesseract?: boolean;
   ocr?: { available?: boolean; engine?: string };
 }
@@ -64,7 +63,7 @@ function uptimePercent(history: boolean[]) {
 export function buildStatusFromHealth(health: HealthData, translate: TranslateStatus | null): StatusData {
   const webOk = true;
   const apiOk = health.ok === true;
-  const conversionsOk = !!(health.libreOffice && health.ffmpeg && health.tesseract);
+  const conversionsOk = !!(health.libreOffice && health.tesseract);
   const allOk = webOk && apiOk && conversionsOk;
 
   const webHistory = historyBars(webOk);
@@ -119,12 +118,6 @@ export function buildStatusFromHealth(health: HealthData, translate: TranslateSt
           name: "LibreOffice",
           operational: !!health.libreOffice,
           detail: "Documents & Office formats",
-        },
-        {
-          id: "ffmpeg",
-          name: "FFmpeg",
-          operational: !!health.ffmpeg,
-          detail: "Audio & video",
         },
         {
           id: "tesseract",

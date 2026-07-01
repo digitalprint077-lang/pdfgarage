@@ -72,6 +72,14 @@ export default {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-6px)" },
         },
+        "dropdown-scale-in": {
+          "0%": { opacity: "0", transform: "scale(0.95)" },
+          "100%": { opacity: "1", transform: "scale(1)" },
+        },
+        "dropdown-scale-out": {
+          "0%": { opacity: "1", transform: "scale(1)" },
+          "100%": { opacity: "0", transform: "scale(0.95)" },
+        },
       },
       animation: {
         "orbit-slow": "orbit-spin 90s linear infinite",
@@ -82,6 +90,8 @@ export default {
         "card-flip-out": "card-flip-out 0.3s cubic-bezier(0.34, 1.4, 0.6, 1) forwards",
         float: "float 4s ease-in-out infinite",
         "convert-sync": "convert-sync 2.4s linear infinite",
+        "dropdown-scale-in": "dropdown-scale-in 100ms ease-out forwards",
+        "dropdown-scale-out": "dropdown-scale-out 100ms ease-in forwards",
       },
     },
   },

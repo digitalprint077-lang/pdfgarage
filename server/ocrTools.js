@@ -13,7 +13,11 @@ const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OCR_SCRIPT = path.join(__dirname, "scripts", "ocr.py");
 
-const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif", "heic"]);
+const IMAGE_EXT = new Set([
+  "3fr", "arw", "avif", "bmp", "cr2", "cr3", "crw", "dcr", "dng", "erf", "gif", "heic", "heif", "ico",
+  "jfif", "jpeg", "jpg", "mos", "mrw", "nef", "orf", "pef", "png", "ppm", "raf", "raw", "rw2", "tga",
+  "tif", "tiff", "webp", "x3f",
+]);
 const PDF_SCALE = 4;
 
 const LANG_MAP = {
@@ -223,8 +227,12 @@ export async function runOcr({ buffer, originalName, tmpDir, ocrLang = "eng", to
         const inputPath = path.join(tmpDir, `input.${ext}`);
         const txtPath = path.join(tmpDir, "ocr.txt");
         await fs.writeFile(inputPath, buffer);
-        const py = await ocrWithPython(inputPath, txtPath, ocrLang);
-        if (py) text = py.trim();
+        try {
+          const py = await ocrWithPython(inputPath, txtPath, ocrLang);
+          if (py) text = py.trim();
+        } catch {
+          /* optional Python OCR fallback — missing pytesseract is OK */
+        }
       }
     } else {
       throw new Error(`OCR supports PDF and images (PNG, JPG, etc.) — not ${ext.toUpperCase()}`);

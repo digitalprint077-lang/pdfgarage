@@ -12,15 +12,16 @@ export interface DashboardData {
   stats: {
     totalConversions: number;
     thisMonth: number;
+    usedToday: number;
     ocrJobs: number;
     translateJobs: number;
     mergeJobs: number;
   };
   plan: {
     name: string;
-    monthlyLimit: number;
-    usedThisMonth: number;
-    remainingThisMonth: number;
+    dailyLimit: number;
+    usedToday: number;
+    remainingToday: number;
     maxFileSizeMb: number;
   };
   recentActivity: DashboardActivity[];

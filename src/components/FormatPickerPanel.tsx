@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useDropdownMotion } from "../hooks/useDropdownMotion";
+import { computeDropdownPosition, type DropdownPosition } from "../utils/dropdownPosition";
 
 export interface PickerOption {
   id: string;
@@ -9,7 +11,6 @@ export interface PickerOption {
 
 export const FORMAT_CATEGORY_LABELS: Record<string, string> = {
   archive: "Archive",
-  audio: "Audio",
   cad: "Cad",
   document: "Document",
   ebook: "Ebook",
@@ -18,12 +19,10 @@ export const FORMAT_CATEGORY_LABELS: Record<string, string> = {
   presentation: "Presentation",
   spreadsheet: "Spreadsheet",
   vector: "Vector",
-  video: "Video",
 };
 
 export const FORMAT_CATEGORY_ORDER = [
   "archive",
-  "audio",
   "cad",
   "document",
   "ebook",
@@ -32,7 +31,6 @@ export const FORMAT_CATEGORY_ORDER = [
   "presentation",
   "spreadsheet",
   "vector",
-  "video",
 ];
 
 interface FormatPickerPanelProps {
@@ -43,6 +41,10 @@ interface FormatPickerPanelProps {
   onChange: (id: string) => void;
   anchorRef: React.RefObject<HTMLElement | null>;
 }
+
+const PANEL_GAP = 4;
+const VIEWPORT_PAD = 16;
+const PANEL_WIDTH = 352;
 
 export default function FormatPickerPanel({
   open,
@@ -55,7 +57,8 @@ export default function FormatPickerPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("document");
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 520 });
+  const [pos, setPos] = useState<DropdownPosition | null>(null);
+  const { mounted, state, handleTransitionEnd } = useDropdownMotion(open, () => setPos(null));
 
   const categories = useMemo(() => {
     const set = new Set(options.map((o) => o.category));
@@ -72,6 +75,22 @@ export default function FormatPickerPanel({
     });
   }, [options, category, search]);
 
+  const syncPosition = useCallback(() => {
+    const anchor = anchorRef.current;
+    if (!anchor) return;
+    const panelHeight = panelRef.current?.offsetHeight ?? 340;
+    setPos(
+      computeDropdownPosition({
+        anchor: anchor.getBoundingClientRect(),
+        panelHeight,
+        width: PANEL_WIDTH,
+        gap: PANEL_GAP,
+        viewportPad: VIEWPORT_PAD,
+        align: "start",
+      })
+    );
+  }, [anchorRef]);
+
   useEffect(() => {
     if (!open) {
       setSearch("");
@@ -81,16 +100,23 @@ export default function FormatPickerPanel({
     if (selected?.category) setCategory(selected.category);
   }, [open, value, options]);
 
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    syncPosition();
+  }, [mounted, open, search, category, filtered.length, syncPosition]);
+
   useEffect(() => {
-    if (!open) return;
-    const anchor = anchorRef.current;
-    if (!anchor) return;
-    const rect = anchor.getBoundingClientRect();
-    const width = Math.min(520, window.innerWidth - 32);
-    let left = rect.left + rect.width / 2 - width / 2;
-    left = Math.max(16, Math.min(left, window.innerWidth - width - 16));
-    setPos({ top: rect.bottom + 10, left, width });
-  }, [open, anchorRef]);
+    if (!mounted) return;
+
+    const onScrollOrResize = () => syncPosition();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [mounted, syncPosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -116,13 +142,20 @@ export default function FormatPickerPanel({
     }
   }, [open, categories, category]);
 
-  if (!open) return null;
+  if (!mounted || !pos) return null;
 
   return createPortal(
     <div
       ref={panelRef}
-      className="fixed z-[200] overflow-hidden rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--picker-surface)/0.98)] shadow-2xl backdrop-blur-xl"
-      style={{ top: pos.top, left: pos.left, width: pos.width }}
+      data-state={state}
+      className="dropdown-popover fixed z-[200] overflow-hidden rounded-md border border-[rgb(var(--border))] bg-[rgb(var(--picker-surface))] shadow-lg ring-1 ring-[rgb(var(--border))]"
+      style={{
+        top: pos.top,
+        left: pos.left,
+        width: pos.width,
+        transformOrigin: pos.transformOrigin,
+      }}
+      onTransitionEnd={handleTransitionEnd}
       role="dialog"
       aria-label="Select format"
     >
@@ -151,15 +184,15 @@ export default function FormatPickerPanel({
         </div>
       </div>
 
-      <div className="flex max-h-[340px]">
+      <div className="flex h-72 min-h-0">
         {!search.trim() ? (
-          <div className="picker-scroll w-[132px] shrink-0 overflow-y-auto border-r border-[rgb(var(--border))] py-1">
+          <div className="picker-scroll w-40 shrink-0 overflow-y-auto border-r border-[rgb(var(--border))] py-1">
             {categories.map((cat) => (
               <button
                 key={cat}
                 type="button"
                 onClick={() => setCategory(cat)}
-                className={`flex w-full items-center justify-between px-3 py-2 text-left text-[13px] transition ${
+                className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm capitalize transition ${
                   category === cat
                     ? "text-[rgb(var(--foreground))]"
                     : "text-[rgb(var(--muted))] hover:text-[rgb(var(--foreground))]"
@@ -177,7 +210,7 @@ export default function FormatPickerPanel({
         ) : null}
 
         <div className="picker-scroll flex-1 overflow-y-auto p-3">
-          <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+          <div className="grid grid-cols-3 gap-1.5">
             {filtered.map((opt) => (
               <button
                 key={opt.id}

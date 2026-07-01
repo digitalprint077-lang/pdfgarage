@@ -88,9 +88,10 @@ export type TranslationKey =
   | "dashPlan"
   | "dashTotalConversions"
   | "dashThisMonth"
+  | "dashToday"
   | "dashOcrJobs"
   | "dashTranslateJobs"
-  | "dashUsageThisMonth"
+  | "dashUsageToday"
   | "dashRemaining"
   | "dashRecentActivity"
   | "dashNoActivity"
@@ -104,7 +105,7 @@ export type TranslationKey =
   | "dashCurrentPlan"
   | "dashFreePlan"
   | "dashPlanDesc"
-  | "dashMonthlyLimit"
+  | "dashDailyLimit"
   | "dashMaxFileSize"
   | "dashUnlimitedLocal"
   | "dashUpgradeSoon"
@@ -121,15 +122,18 @@ export type TranslationKey =
   | "dashEmailVerified"
   | "dashAccountStatus"
   | "dashActive"
-  | "dashLoading";
+  | "dashLoading"
+  | "freeUsageRemaining"
+  | "freeUsageLimitReached"
+  | "freeUsageUpgrade";
 
 type Dict = Record<TranslationKey, string>;
 
 const en: Dict = {
   appTitle: "PDF Garage",
-  homeTitle: "Convert Any File",
+  homeTitle: "Convert PDFs & Documents Online",
   homeSubtitle:
-    "Drop a file and pick what to turn it into. Supports documents, images, audio, video, OCR, translation, archives and more.",
+    "Drop a file into PDF Garage and pick your output format. PDFs, Word, Excel, images, OCR, translation, and archives — free, secure, and right in your browser.",
   tools: "Tools",
   pricing: "Pricing",
   selectFileTitle: "Select your file here to get started",
@@ -156,7 +160,7 @@ const en: Dict = {
   popularConversions: "Popular conversions",
   formatCatalog: "Format Catalog",
   formatCatalogDesc:
-    "Handles {total} formats across {categories} categories — documents, images, audio, video, archives and more.",
+    "Handles {total} formats across {categories} categories — documents, images, archives and more.",
   commonConversionTypes: "Common conversion types",
   formatsListed: "listed",
   browseFormats: "Browse by category",
@@ -217,10 +221,11 @@ const en: Dict = {
   dashPlan: "Plan & usage",
   dashTotalConversions: "Total conversions",
   dashThisMonth: "This month",
+  dashToday: "Today",
   dashOcrJobs: "OCR jobs",
   dashTranslateJobs: "Translations",
-  dashUsageThisMonth: "Monthly usage",
-  dashRemaining: "remaining",
+  dashUsageToday: "Today's usage",
+  dashRemaining: "remaining today",
   dashRecentActivity: "Recent activity",
   dashNoActivity: "No activity yet",
   dashNoActivityHint: "Convert a file while signed in to see your history here.",
@@ -232,8 +237,8 @@ const en: Dict = {
   dashSuccess: "Success",
   dashCurrentPlan: "Current plan",
   dashFreePlan: "Free",
-  dashPlanDesc: "Cloud conversions with generous monthly limits.",
-  dashMonthlyLimit: "Conversions per month",
+  dashPlanDesc: "15 conversions per day across all tools. Resets at midnight UTC.",
+  dashDailyLimit: "Conversions per day",
   dashMaxFileSize: "Max file size",
   dashUnlimitedLocal: "Secure cloud processing",
   dashUpgradeSoon: "Paid plans coming soon",
@@ -251,13 +256,16 @@ const en: Dict = {
   dashAccountStatus: "Account status",
   dashActive: "Active",
   dashLoading: "Loading dashboard…",
+  freeUsageRemaining: "{remaining} of {limit} free conversions left today",
+  freeUsageLimitReached: "Daily limit reached (15 conversions). Resets at midnight UTC.",
+  freeUsageUpgrade: "View paid plans",
 };
 
 const es: Dict = {
   ...en,
-  homeTitle: "Convierte cualquier archivo",
+  homeTitle: "Convierte PDFs y documentos online",
   homeSubtitle:
-    "Sube un archivo y elige el formato. Documentos, imágenes, audio, video, OCR, traducción y más.",
+    "Sube un archivo a PDF Garage y elige el formato de salida. PDF, Word, Excel, imágenes, OCR, traducción y archivos — gratis, seguro y en tu navegador.",
   tools: "Herramientas",
   selectFileTitle: "Selecciona tu archivo para comenzar",
   selectFileHint: "o suelta tu archivo aquí.",
@@ -286,8 +294,9 @@ const es: Dict = {
 
 const fr: Dict = {
   ...en,
-  homeTitle: "Convertir n'importe quel fichier",
-  homeSubtitle: "Déposez un fichier et choisissez le format. Documents, images, OCR, traduction et plus.",
+  homeTitle: "Convertir PDF et documents en ligne",
+  homeSubtitle:
+    "Déposez un fichier sur PDF Garage et choisissez le format de sortie. PDF, Word, Excel, images, OCR, traduction et archives — gratuit, sécurisé, dans le navigateur.",
   tools: "Outils",
   selectFileTitle: "Sélectionnez votre fichier pour commencer",
   selectFileHint: "ou déposez votre fichier ici.",
@@ -310,8 +319,9 @@ const fr: Dict = {
 
 const de: Dict = {
   ...en,
-  homeTitle: "Beliebige Datei konvertieren",
-  homeSubtitle: "Datei hochladen und Zielformat wählen. Dokumente, Bilder, OCR, Übersetzung und mehr.",
+  homeTitle: "PDFs & Dokumente online konvertieren",
+  homeSubtitle:
+    "Datei in PDF Garage hochladen und Zielformat wählen. PDF, Word, Excel, Bilder, OCR, Übersetzung und Archive — kostenlos, sicher, im Browser.",
   tools: "Werkzeuge",
   selectFileTitle: "Datei auswählen zum Starten",
   selectFileHint: "oder Datei hier ablegen.",
@@ -334,8 +344,9 @@ const de: Dict = {
 
 const zh: Dict = {
   ...en,
-  homeTitle: "转换任意文件",
-  homeSubtitle: "上传文件并选择目标格式。支持文档、图片、OCR、翻译等。",
+  homeTitle: "在线转换 PDF 与文档",
+  homeSubtitle:
+    "将文件上传到 PDF Garage 并选择输出格式。支持 PDF、Word、Excel、图片、OCR、翻译和压缩包 — 免费、安全、无需安装。",
   tools: "工具",
   selectFileTitle: "选择文件开始",
   selectFileHint: "或将文件拖放到此处。",
@@ -358,8 +369,9 @@ const zh: Dict = {
 
 const ar: Dict = {
   ...en,
-  homeTitle: "تحويل أي ملف",
-  homeSubtitle: "ارفع ملفاً واختر الصيغة. مستندات، صور، OCR، ترجمة والمزيد.",
+  homeTitle: "تحويل PDF والمستندات عبر الإنترنت",
+  homeSubtitle:
+    "ارفع ملفاً إلى PDF Garage واختر صيغة الإخراج. PDF وWord وExcel وصور وOCR وترجمة وأرشيف — مجاناً وآمناً في متصفحك.",
   tools: "الأدوات",
   selectFileTitle: "اختر ملفك للبدء",
   selectFileHint: "أو أسقط ملفك هنا.",
@@ -382,8 +394,9 @@ const ar: Dict = {
 
 const hi: Dict = {
   ...en,
-  homeTitle: "कोई भी फ़ाइल कन्वर्ट करें",
-  homeSubtitle: "फ़ाइल अपलोड करें और प्रारूप चुनें। दस्तावेज़, OCR, अनुवाद और अधिक।",
+  homeTitle: "PDF और दस्तावेज़ ऑनलाइन कन्वर्ट करें",
+  homeSubtitle:
+    "PDF Garage में फ़ाइल अपलोड करें और आउटपुट फ़ॉर्मैट चुनें। PDF, Word, Excel, छवियाँ, OCR, अनुवाद और संग्रह — मुफ़्त, सुरक्षित, ब्राउज़र में।",
   tools: "टूल्स",
   selectFileTitle: "शुरू करने के लिए फ़ाइल चुनें",
   selectFileHint: "या फ़ाइल यहाँ छोड़ें।",
@@ -406,8 +419,9 @@ const hi: Dict = {
 
 const ur: Dict = {
   ...en,
-  homeTitle: "کoi بھی فائل تبدیل کریں",
-  homeSubtitle: "فائل اپ لوڈ کریں اور فارمیٹ منتخب کریں۔ دستاویزات، OCR، ترجمہ اور مزید۔",
+  homeTitle: "PDF اور دستاویزات آن لائن تبدیل کریں",
+  homeSubtitle:
+    "PDF Garage میں فائل اپ لوڈ کریں اور آؤٹ پٹ فارمیٹ منتخب کریں۔ PDF، Word، Excel، تصاویر، OCR، ترجمہ اور آرکائیوز — مفت، محفوظ، براؤزر میں۔",
   tools: "اوزار",
   selectFileTitle: "شروع کرنے کے لیے فائل منتخب کریں",
   selectFileHint: "یا فائل یہاں چھوڑیں۔",
@@ -430,8 +444,9 @@ const ur: Dict = {
 
 const pt: Dict = {
   ...en,
-  homeTitle: "Converta qualquer arquivo",
-  homeSubtitle: "Envie um arquivo e escolha o formato. Documentos, OCR, tradução e mais.",
+  homeTitle: "Converta PDFs e documentos online",
+  homeSubtitle:
+    "Envie um arquivo para o PDF Garage e escolha o formato de saída. PDF, Word, Excel, imagens, OCR, tradução e arquivos — grátis, seguro, no navegador.",
   tools: "Ferramentas",
   selectFileTitle: "Selecione seu arquivo para começar",
   selectFileHint: "ou solte seu arquivo aqui.",
@@ -454,8 +469,9 @@ const pt: Dict = {
 
 const ja: Dict = {
   ...en,
-  homeTitle: "あらゆるファイルを変換",
-  homeSubtitle: "ファイルをアップロードして形式を選択。文書、OCR、翻訳などに対応。",
+  homeTitle: "PDFとドキュメントをオンライン変換",
+  homeSubtitle:
+    "PDF Garageにファイルをアップロードし、出力形式を選びます。PDF、Word、Excel、画像、OCR、翻訳、アーカイブ — 無料・安全・ブラウザだけで。",
   tools: "ツール",
   selectFileTitle: "ファイルを選択して開始",
   selectFileHint: "またはここにドロップ。",

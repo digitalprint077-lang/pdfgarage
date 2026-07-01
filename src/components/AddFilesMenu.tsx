@@ -1,5 +1,6 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useLayoutEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { useDropdownMotion } from "../hooks/useDropdownMotion";
 
 export type CloudProvider = "google-drive" | "dropbox" | "onedrive";
 
@@ -16,6 +17,16 @@ interface AddFilesMenuProps {
 type MenuItem =
   | { type: "action"; id: string; label: string; icon: "folder" | "link" | CloudProvider; action: () => void }
   | { type: "separator" };
+
+type PanelPos = {
+  top: number;
+  left: number;
+  width: number;
+  transform?: string;
+  transformOrigin: string;
+};
+
+const PANEL_EST_HEIGHT = 280;
 
 function MenuIcon({ icon }: { icon: MenuItem extends { type: "action" } ? MenuItem["icon"] : never }) {
   if (icon === "folder") {
@@ -59,6 +70,32 @@ function MenuIcon({ icon }: { icon: MenuItem extends { type: "action" } ? MenuIt
   );
 }
 
+function computePanelPos(rect: DOMRect, placement: "below" | "above"): PanelPos {
+  const width = Math.max(rect.width, 240);
+  const pad = 12;
+
+  if (placement === "below") {
+    let left = rect.left + rect.width / 2 - width / 2;
+    left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
+    return {
+      top: rect.bottom + 8,
+      left,
+      width,
+      transformOrigin: `${rect.left + rect.width / 2 - left}px 0px`,
+    };
+  }
+
+  let left = rect.right - width;
+  left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
+  return {
+    top: rect.top - 8,
+    left: rect.right,
+    width,
+    transform: "translate(-100%, -100%)",
+    transformOrigin: `${rect.right - left}px ${PANEL_EST_HEIGHT}px`,
+  };
+}
+
 export default function AddFilesMenu({
   onAddFiles,
   onAddUrl,
@@ -70,18 +107,30 @@ export default function AddFilesMenu({
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 240 });
+  const [pos, setPos] = useState<PanelPos | null>(null);
+  const { mounted, state, handleTransitionEnd } = useDropdownMotion(open, () => setPos(null));
+
+  const syncPosition = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    setPos(computePanelPos(el.getBoundingClientRect(), placement));
+  }, [placement]);
+
+  useLayoutEffect(() => {
+    if (!mounted) return;
+    syncPosition();
+  }, [mounted, open, placement, syncPosition]);
 
   useEffect(() => {
-    if (!open || !wrapperRef.current) return;
-    const r = wrapperRef.current.getBoundingClientRect();
-    const width = Math.max(r.width, 240);
-    if (placement === "below") {
-      setPos({ top: r.bottom + 8, left: r.left + r.width / 2 - width / 2, width });
-    } else {
-      setPos({ top: r.top - 8, left: r.right, width });
-    }
-  }, [open, placement]);
+    if (!mounted) return;
+    const onScrollOrResize = () => syncPosition();
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+    return () => {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [mounted, syncPosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,14 +171,9 @@ export default function AddFilesMenu({
     },
   ];
 
-  const panelStyle =
-    placement === "below"
-      ? { top: pos.top, left: pos.left, width: pos.width }
-      : { top: pos.top, left: pos.left, width: pos.width, transform: "translate(-100%, -100%)" };
-
   const fileIcon =
     variant === "primary" ? (
-      <svg className="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ) : (
@@ -144,22 +188,34 @@ export default function AddFilesMenu({
     </svg>
   );
 
+  const handleMainClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setOpen(false);
+    onAddFiles();
+  };
+
+  const handleChevronClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setOpen((o) => !o);
+  };
+
   return (
     <>
       <div
         ref={wrapperRef}
         className={
           variant === "primary"
-            ? "inline-flex min-w-[220px] overflow-hidden rounded-xl shadow-lg shadow-brand/30"
+            ? "inline-flex h-10 overflow-hidden rounded-lg shadow-lg shadow-brand/30"
             : "inline-flex overflow-hidden rounded-lg border border-gray-300 dark:border-white/15"
         }
       >
         <button
           type="button"
-          onClick={onAddFiles}
+          onClick={handleMainClick}
           className={
             variant === "primary"
-              ? "inline-flex flex-1 items-center gap-3 bg-brand px-5 py-3.5 text-base font-semibold text-white transition hover:bg-brand-hover"
+              ? "inline-flex flex-1 items-center gap-2 bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-hover active:bg-brand-hover"
               : "inline-flex items-center gap-2 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
           }
         >
@@ -169,10 +225,11 @@ export default function AddFilesMenu({
         <button
           type="button"
           aria-label="More upload options"
-          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          onClick={handleChevronClick}
           className={
             variant === "primary"
-              ? "inline-flex items-center border-l border-white/25 bg-brand px-3 py-3.5 text-white transition hover:bg-brand-hover"
+              ? "inline-flex items-center border-l border-white/25 bg-brand px-2.5 text-white transition hover:bg-brand-hover"
               : "inline-flex items-center border-l border-gray-300 bg-white px-2.5 py-2.5 text-gray-700 transition hover:bg-gray-50 dark:border-white/15 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
           }
         >
@@ -180,31 +237,44 @@ export default function AddFilesMenu({
         </button>
       </div>
 
-      {open &&
-        createPortal(
-          <div
-            ref={panelRef}
-            style={panelStyle}
-            className="fixed z-[200] rounded-xl border border-gray-200 bg-white py-1 shadow-2xl dark:border-white/10 dark:bg-[#2a2a2a]"
-          >
-            {items.map((item, i) =>
-              item.type === "separator" ? (
-                <div key={`sep-${i}`} className="my-1 border-t border-gray-200 dark:border-white/10" />
-              ) : (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={item.action}
-                  className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/5"
-                >
-                  <MenuIcon icon={item.icon} />
-                  {item.label}
-                </button>
-              )
-            )}
-          </div>,
-          document.body
-        )}
+      {mounted && pos
+        ? createPortal(
+            <div
+              ref={panelRef}
+              className="fixed z-[200]"
+              style={{
+                top: pos.top,
+                left: pos.left,
+                width: pos.width,
+                transform: pos.transform,
+              }}
+            >
+              <div
+                data-state={state}
+                onTransitionEnd={handleTransitionEnd}
+                style={{ transformOrigin: pos.transformOrigin }}
+                className="dropdown-popover overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-2xl dark:border-white/10 dark:bg-[#2a2a2a]"
+              >
+                {items.map((item, i) =>
+                  item.type === "separator" ? (
+                    <div key={`sep-${i}`} className="my-1 border-t border-gray-200 dark:border-white/10" />
+                  ) : (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={item.action}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm text-gray-700 transition hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/5"
+                    >
+                      <MenuIcon icon={item.icon} />
+                      {item.label}
+                    </button>
+                  )
+                )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

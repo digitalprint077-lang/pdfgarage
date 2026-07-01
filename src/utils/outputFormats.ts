@@ -2,20 +2,12 @@ import { ALL_FORMATS, getFormat } from "../data/catalog";
 import type { FormatCategory } from "../data/catalog";
 import type { PickerOption } from "../components/FormatPickerPanel";
 
-/** Formats listed in catalog but not available as conversion output. */
-const AUDIO_OUTPUT_SKIP = new Set(["ape", "mid", "midi"]);
-const VIDEO_OUTPUT_SKIP = new Set(["rm", "swf"]);
-
-function isValidMediaOutput(id: string, category: "audio" | "video") {
-  if (category === "audio") return !AUDIO_OUTPUT_SKIP.has(id);
-  return !VIDEO_OUTPUT_SKIP.has(id);
-}
 export function getOutputFormatOptions(fromFormat: string): PickerOption[] {
   const from = fromFormat.toLowerCase();
   const fromDef = getFormat(from);
 
   if (from === "pdf") {
-    return ALL_FORMATS.filter((f) => f.category !== "video" && f.category !== "audio").map(toPicker);
+    return ALL_FORMATS.filter((f) => f.id !== "pdf").map(toPicker);
   }
 
   if (fromDef?.category === "image") {
@@ -24,18 +16,6 @@ export function getOutputFormatOptions(fromFormat: string): PickerOption[] {
     ).map(toPicker);
   }
 
-  if (fromDef?.category === "video") {
-    return ALL_FORMATS.filter(
-      (f) =>
-        (f.category === "video" || f.category === "audio") &&
-        (f.category === "audio" ? isValidMediaOutput(f.id, "audio") : isValidMediaOutput(f.id, "video"))
-    ).map(toPicker);
-  }
-
-  if (fromDef?.category === "audio") {
-    return ALL_FORMATS.filter((f) => f.category === "audio" && isValidMediaOutput(f.id, "audio")).map(toPicker);
-  }
-  // Office / document / default → PDF + documents + images
   return ALL_FORMATS.filter(
     (f) =>
       f.id === "pdf" ||
@@ -58,8 +38,6 @@ export function formatFileTypeLabel(format: string): string {
   const labels: Partial<Record<FormatCategory, string>> = {
     document: "Document",
     image: "Image",
-    video: "Video",
-    audio: "Audio",
     spreadsheet: "Spreadsheet",
     presentation: "Presentation",
     ebook: "E-book",

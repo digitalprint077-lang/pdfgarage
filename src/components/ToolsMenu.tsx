@@ -1,13 +1,19 @@
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useRef, useCallback, useState, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { TOOLS, type ToolDef } from "../data/catalog";
 import { useI18n } from "../i18n/I18nContext";
+import { useDropdownMotion } from "../hooks/useDropdownMotion";
+import { computeDropdownPosition, type DropdownPosition } from "../utils/dropdownPosition";
 
 interface ToolsMenuProps {
   open: boolean;
   onClose: () => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  panelHoverProps?: {
+    onMouseEnter: () => void;
+    onMouseLeave: () => void;
+  };
 }
 
 const MENU_WIDTH = 720;
@@ -85,11 +91,12 @@ function splitInHalf(items: ToolDef[]) {
   return [items.slice(0, mid), items.slice(mid)] as const;
 }
 
-export default function ToolsMenu({ open, onClose, anchorRef }: ToolsMenuProps) {
+export default function ToolsMenu({ open, onClose, anchorRef, panelHoverProps }: ToolsMenuProps) {
   const { t } = useI18n();
   const location = useLocation();
   const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0, maxHeight: 520 });
+  const [pos, setPos] = useState<(DropdownPosition & { maxHeight: number }) | null>(null);
+  const { mounted, state, handleTransitionEnd } = useDropdownMotion(open, () => setPos(null));
 
   const convertTools = TOOLS.filter((tool) => tool.group === "convert");
   const [convertCol1, convertCol2] = splitInHalf(convertTools);
@@ -111,29 +118,33 @@ export default function ToolsMenu({ open, onClose, anchorRef }: ToolsMenuProps) 
     const anchor = anchorRef.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
-    const width = Math.min(MENU_WIDTH, window.innerWidth - VIEWPORT_PAD * 2);
     const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_PAD;
     const maxHeight = Math.min(spaceBelow, 560);
-
-    let left = rect.left;
-    if (left + width > window.innerWidth - VIEWPORT_PAD) {
-      left = window.innerWidth - width - VIEWPORT_PAD;
-    }
-    left = Math.max(VIEWPORT_PAD, left);
-
-    setPos({ top: rect.bottom + VIEWPORT_PAD, left, maxHeight });
+    const base = computeDropdownPosition({
+      anchor: rect,
+      panelHeight: maxHeight,
+      width: MENU_WIDTH,
+      gap: VIEWPORT_PAD,
+      viewportPad: VIEWPORT_PAD,
+      align: "start",
+    });
+    setPos({ ...base, maxHeight });
   }, [anchorRef]);
 
-  useEffect(() => {
-    if (!open) return;
+  useLayoutEffect(() => {
+    if (!mounted) return;
     updatePosition();
+  }, [mounted, open, updatePosition]);
+
+  useEffect(() => {
+    if (!mounted) return;
     window.addEventListener("resize", updatePosition);
     window.addEventListener("scroll", updatePosition, true);
     return () => {
       window.removeEventListener("resize", updatePosition);
       window.removeEventListener("scroll", updatePosition, true);
     };
-  }, [open, updatePosition]);
+  }, [mounted, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -153,7 +164,7 @@ export default function ToolsMenu({ open, onClose, anchorRef }: ToolsMenuProps) 
     };
   }, [open, onClose, anchorRef]);
 
-  if (!open) return null;
+  if (!mounted || !pos) return null;
 
   const panelClass = "border-[rgb(var(--border))] bg-[rgb(var(--card))] text-[rgb(var(--foreground))]";
   const sectionHeaderBorder = "border-[rgb(var(--border))]";
@@ -163,13 +174,17 @@ export default function ToolsMenu({ open, onClose, anchorRef }: ToolsMenuProps) 
     <div
       ref={panelRef}
       role="menu"
+      data-state={state}
+      onTransitionEnd={handleTransitionEnd}
+      {...panelHoverProps}
       style={{
         top: pos.top,
         left: pos.left,
         maxHeight: pos.maxHeight,
-        width: Math.min(MENU_WIDTH, window.innerWidth - VIEWPORT_PAD * 2),
+        width: pos.width,
+        transformOrigin: pos.transformOrigin,
       }}
-      className={`fixed z-[200] overflow-y-auto overscroll-contain rounded-2xl border p-5 shadow-2xl picker-scroll ${panelClass}`}
+      className={`dropdown-popover fixed z-[200] overflow-y-auto overscroll-contain rounded-2xl border p-5 shadow-2xl picker-scroll ${panelClass}`}
     >
       {/* Row 1: Convert (2 cols) + Optimize */}
       <div className="grid gap-6 md:grid-cols-3">

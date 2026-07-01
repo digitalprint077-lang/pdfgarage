@@ -37,7 +37,6 @@ interface FileJobWorkspaceProps {
   onTranslateFromChange: (v: string) => void;
   onTranslateToChange: (v: string) => void;
   translateProgress?: { phase: string; done: number; total: number } | null;
-  multi: boolean;
 }
 
 export default function FileJobWorkspace({
@@ -62,7 +61,6 @@ export default function FileJobWorkspace({
   onTranslateFromChange,
   onTranslateToChange,
   translateProgress,
-  multi,
 }: FileJobWorkspaceProps) {
   const { t } = useI18n();
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -106,7 +104,7 @@ export default function FileJobWorkspace({
       <input
         ref={addInputRef}
         type="file"
-        multiple={multi}
+        multiple
         className="hidden"
         onChange={(e) => {
           if (e.target.files?.length) onAddFiles(Array.from(e.target.files));

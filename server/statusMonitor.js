@@ -64,11 +64,10 @@ export function buildStatusSnapshot({
   webOk,
   libreOffice,
   pdf2docx,
-  ffmpeg,
   tesseract,
   translate,
 }) {
-  const conversionsOk = libreOffice && ffmpeg && tesseract;
+  const conversionsOk = libreOffice && tesseract;
   recordDailyStatus({
     webinterface: webOk,
     api: apiOk,
@@ -129,7 +128,6 @@ export function buildStatusSnapshot({
       history: convHistory.map((h) => h.up),
       items: [
         { id: "libreoffice", name: "LibreOffice", operational: !!libreOffice, detail: "Documents & Office formats" },
-        { id: "ffmpeg", name: "FFmpeg", operational: !!ffmpeg, detail: "Audio & video" },
         { id: "tesseract", name: "Tesseract OCR", operational: !!tesseract, detail: "Scan & image text" },
         { id: "pdf2docx", name: "pdf2docx", operational: !!pdf2docx, detail: "PDF to Word (Python)" },
         {

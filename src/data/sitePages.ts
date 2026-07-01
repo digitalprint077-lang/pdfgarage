@@ -40,7 +40,7 @@ export const SITE_PAGES: Record<string, SitePage> = {
 
         paragraphs: [
 
-          "PDF Garage is a file conversion platform built for everyday document work — PDFs, Office files, images, audio, video, OCR, and translation — in one simple workflow.",
+          "PDF Garage is a document conversion platform built for everyday file work — PDFs, Office files, images, OCR, and translation — in one simple workflow.",
 
           "Upload a file, choose your output format, and download the result. Our cloud infrastructure handles the heavy lifting so you can convert from any device with a browser.",
 
@@ -54,7 +54,7 @@ export const SITE_PAGES: Record<string, SitePage> = {
 
         bullets: [
 
-          "Convert between 100+ document, image, audio, and video formats",
+          "Convert between document, image, spreadsheet, and presentation formats",
 
           "Merge or compress PDFs and images",
 
@@ -74,7 +74,7 @@ export const SITE_PAGES: Record<string, SitePage> = {
 
         paragraphs: [
 
-          "We prioritize privacy and speed: encrypted transfers, automatic file deletion after processing, and industry-standard conversion engines (LibreOffice, FFmpeg, Tesseract).",
+          "We prioritize privacy and speed: encrypted transfers, automatic file deletion after processing, and industry-standard conversion engines (LibreOffice, Tesseract).",
 
           "PDF Garage is designed for students, freelancers, and teams who need reliable conversions without complicated software installs.",
 
@@ -208,7 +208,7 @@ export const SITE_PAGES: Record<string, SitePage> = {
 
         paragraphs: [
 
-          "Large videos and multi-hundred-page PDFs take longer to process. For the best experience, convert one large file at a time and use a stable internet connection.",
+          "Large PDFs and high-resolution images take longer to process. For the best experience, convert one large file at a time and use a stable internet connection.",
 
         ],
 

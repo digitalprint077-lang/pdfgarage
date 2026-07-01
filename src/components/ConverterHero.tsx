@@ -71,7 +71,7 @@ function FormatCard({
       onClick={onClick}
       aria-label={ariaLabel}
       aria-expanded={open}
-      className={`group/card relative flex h-[7.25rem] w-[6.5rem] cursor-pointer flex-col items-center justify-between rounded-xl border px-2 pb-2 pt-4 transition duration-200 sm:h-[7.75rem] sm:w-28 ${
+      className={`group/card relative flex h-[6.75rem] w-24 cursor-pointer flex-col items-center justify-between rounded-xl border px-1.5 pb-1.5 pt-3 transition duration-200 ${
         open
           ? "border-brand/50 bg-[rgb(var(--format-card-hover))] shadow-[0_0_24px_rgba(239,68,68,0.22)] dark:shadow-[0_0_24px_rgba(239,68,68,0.28)]"
           : "border-[rgb(var(--border))] bg-[rgb(var(--format-card))] shadow-soft hover:border-brand/25 hover:bg-[rgb(var(--format-card-hover))]"
@@ -85,7 +85,7 @@ function FormatCard({
         style={{ transformStyle: "preserve-3d" }}
       >
         <FormatIcon format={display} />
-        <span className="text-sm font-bold uppercase tracking-wide text-[rgb(var(--format-card-text))]">
+        <span className="text-xs font-bold uppercase tracking-wide text-[rgb(var(--format-card-text))]">
           {label}
         </span>
       </div>
@@ -145,23 +145,23 @@ function FormatSelector({
 
 function ConvertArrow({ onSwap }: { onSwap?: () => void }) {
   return (
-    <div className="relative mx-1 flex flex-col items-center gap-1.5 sm:mx-2">
+    <div className="relative mx-1 flex flex-col items-center gap-1.5">
       <div className="flex items-center">
-        <span className="convert-sync-line h-px w-7 sm:w-9" aria-hidden />
+        <span className="convert-sync-line h-px w-5" aria-hidden />
         <button
           type="button"
           aria-label="Swap input and output formats"
           onClick={onSwap}
-          className="group/op relative mx-0.5 flex size-10 shrink-0 items-center justify-center bg-transparent p-0 sm:size-11"
+          className="group/op relative mx-0.5 flex size-10 shrink-0 items-center justify-center bg-transparent p-0"
         >
           <span className="convert-sync-glow pointer-events-none absolute inset-0 rounded-full" aria-hidden />
-          <span className="convert-sync-circle relative flex size-10 items-center justify-center rounded-full border bg-[rgb(var(--sync-bg))] sm:size-11">
+          <span className="convert-sync-circle relative flex size-10 items-center justify-center rounded-full border bg-[rgb(var(--sync-bg))]">
             <span
               className="convert-sync-ring pointer-events-none absolute inset-[3px] rounded-full border-2 border-transparent"
               aria-hidden
             />
             <svg
-              className="relative z-[1] size-[18px] text-[rgb(var(--sync-icon))] sm:size-5"
+              className="relative z-[1] size-[18px] text-[rgb(var(--sync-icon))]"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -175,7 +175,7 @@ function ConvertArrow({ onSwap }: { onSwap?: () => void }) {
             </svg>
           </span>
         </button>
-        <span className="convert-sync-line-reverse h-px w-7 sm:w-9" aria-hidden />
+        <span className="convert-sync-line-reverse h-px w-5" aria-hidden />
       </div>
       <span className="text-[10px] font-semibold uppercase tracking-[0.25em] text-[rgb(var(--foreground))]">
         to
@@ -256,12 +256,10 @@ function FormatPickerRow({
   };
 
   const openFrom = () => {
-    onFormatInteraction?.();
     setOpenPicker("from");
   };
 
   const openTo = () => {
-    onFormatInteraction?.();
     setOpenPicker("to");
   };
 

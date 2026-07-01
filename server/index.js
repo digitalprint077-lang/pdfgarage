@@ -7,7 +7,7 @@ import path from "path";
 import fs from "fs/promises";
 import os from "os";
 import { fileURLToPath } from "url";
-import { batchPdfToImages, convertFile, findFfmpeg, isPdfToImageConversion } from "./converter.js";
+import { batchPdfToImages, convertFile, isPdfToImageConversion, packBatchResults } from "./converter.js";
 import { isPdf2DocxAvailable } from "./pdf2docx.js";
 import { mergePdfs, compressPdf, compressImage } from "./pdfTools.js";
 import { createZipArchive, extractZip } from "./archiveTools.js";
@@ -21,6 +21,7 @@ import {
 } from "./translateProgress.js";
 import { mountAuthRoutes, optionalAuth } from "./auth.js";
 import { recordUserActivity } from "./userActivity.js";
+import { assertWithinDailyLimit, getUsageSnapshot, recordSuccessfulJob } from "./usageLimits.js";
 import { saveContactMessage } from "./db.js";
 import { buildStatusSnapshot } from "./statusMonitor.js";
 
@@ -50,7 +51,6 @@ app.get("/api/status", async (_req, res) => {
   try {
     const libreOffice = await detectLibreOffice();
     const pdf2docx = await isPdf2DocxAvailable();
-    const ffmpeg = !!(await findFfmpeg());
     const tesseract = await isTesseractAvailable();
     const translate = await getTranslateProviderStatus().catch(() => null);
     const webOk = true;
@@ -61,7 +61,6 @@ app.get("/api/status", async (_req, res) => {
         webOk,
         libreOffice,
         pdf2docx,
-        ffmpeg,
         tesseract,
         translate,
       })
@@ -74,10 +73,9 @@ app.get("/api/status", async (_req, res) => {
 app.get("/api/health", async (_req, res) => {
   const libreOffice = await detectLibreOffice();
   const pdf2docx = await isPdf2DocxAvailable();
-  const ffmpeg = !!(await findFfmpeg());
   const tesseract = await isTesseractAvailable();
   const ocr = await getOcrEngineInfo();
-  res.json({ ok: true, libreOffice, pdf2docx, ffmpeg, tesseract, ocr });
+  res.json({ ok: true, libreOffice, pdf2docx, tesseract, ocr });
 });
 
 app.get("/api/languages", (_req, res) => {
@@ -144,11 +142,15 @@ app.post("/api/translate", async (req, res) => {
 app.get("/api/formats", (_req, res) => {
   res.json({
     categories: [
-      "document", "image", "video", "audio", "spreadsheet",
+      "document", "image", "spreadsheet",
       "presentation", "ebook", "archive", "vector", "cad", "font",
     ],
     operations: ["convert", "merge", "compress", "extract", "create-archive", "ocr", "translate"],
   });
+});
+
+app.get("/api/usage", optionalAuth, (req, res) => {
+  res.json(getUsageSnapshot(req, res));
 });
 
 app.post(
@@ -159,6 +161,15 @@ app.post(
     { name: "files", maxCount: 30 },
   ]),
   async (req, res) => {
+    try {
+      assertWithinDailyLimit(req, res);
+    } catch (err) {
+      if (err.code === "DAILY_LIMIT") {
+        return res.status(429).json({ error: err.message, code: err.code, usage: err.usage });
+      }
+      return sendError(res, err);
+    }
+
     const operation = String(req.query.operation || req.body?.operation || "convert").toLowerCase();
     const fromFormat = String(req.body?.fromFormat || "").toLowerCase();
     const toFormat = String(req.body?.toFormat || "").toLowerCase();
@@ -170,23 +181,26 @@ app.post(
       operation === "ocr" ||
       Boolean(req.body?.ocrLang && operation !== "translate" && operation !== "merge");
 
-    const single = req.files?.file?.[0];
-    const multi = req.files?.files || [];
+    const uploadFiles = getUploadFiles(req);
     const resolvedFromFormat =
       fromFormat ||
-      path.extname((multi[0] || single)?.originalname || "")
+      path.extname(uploadFiles[0]?.originalname || "")
         .slice(1)
         .toLowerCase();
 
+    if (uploadFiles.length === 0) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
     if (operation === "merge") {
-      if (multi.length < 2) {
+      if (uploadFiles.length < 2) {
         return res.status(400).json({ error: "Upload at least 2 PDF files to merge" });
       }
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdfcvt-"));
       try {
         const baseName = req.body.baseName || "merged";
         const result = await mergePdfs(
-          multi.map((f) => f.buffer),
+          uploadFiles.map((f) => f.buffer),
           baseName
         );
         logAndSendFile(req, res, result, {
@@ -204,13 +218,10 @@ app.post(
     }
 
     if (operation === "create-archive") {
-      if (multi.length < 1) {
-        return res.status(400).json({ error: "Upload at least 1 file to archive" });
-      }
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdfcvt-"));
       try {
         const result = await createZipArchive(
-          multi.map((f) => ({ buffer: f.buffer, originalName: f.originalname })),
+          uploadFiles.map((f) => ({ buffer: f.buffer, originalName: f.originalname })),
           tmpDir,
           req.body.baseName || "archive"
         );
@@ -228,18 +239,17 @@ app.post(
       return;
     }
 
+    const allPdf = uploadFiles.every((f) => fileFormat(f) === "pdf");
     if (
       operation === "convert" &&
+      toFormat &&
       isPdfToImageConversion(resolvedFromFormat, toFormat) &&
-      multi.length > 0
+      allPdf
     ) {
-      if (!toFormat) {
-        return res.status(400).json({ error: "toFormat is required" });
-      }
       const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdfcvt-"));
       try {
         const result = await batchPdfToImages(
-          multi.map((f) => ({ buffer: f.buffer, originalName: f.originalname })),
+          uploadFiles.map((f) => ({ buffer: f.buffer, originalName: f.originalname })),
           toFormat,
           tmpDir,
           req.body.baseName || "converted"
@@ -258,90 +268,43 @@ app.post(
       return;
     }
 
-    if (!single && multi.length === 0) {
-      return res.status(400).json({ error: "No file uploaded" });
-    }
-
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pdfcvt-"));
+    const progressId = String(req.body?.progressId || "").trim();
+    const fileCtx = {
+      operation,
+      fromFormat,
+      toFormat,
+      quality,
+      ocrLang,
+      translateFrom,
+      translateTo,
+      wantsOcr,
+      progressId,
+      baseName: req.body.baseName || "converted",
+    };
 
     try {
-      let result;
-      let loggedOperation = operation;
-
-      if (operation === "compress") {
-        const fmt = fromFormat || path.extname(single.originalname).slice(1).toLowerCase();
-        const baseName = path.basename(single.originalname, path.extname(single.originalname));
-        if (fmt === "pdf") {
-          result = await compressPdf(single.buffer, baseName, quality);
-        } else if (["png", "jpg", "jpeg", "webp"].includes(fmt)) {
-          result = await compressImage(single.buffer, fmt, baseName, quality || 80);
-        } else {
-          throw new Error("Compress supports PDF, PNG, and JPG only");
-        }
-      } else if (operation === "extract") {
-        result = await extractZip(single.buffer, tmpDir);
-      } else if (wantsOcr) {
-        loggedOperation = "ocr";
-        result = await runOcr({
-          buffer: single.buffer,
-          originalName: single.originalname,
+      if (uploadFiles.length === 1) {
+        const file = uploadFiles[0];
+        const { result, loggedOperation, fmt } = await processSingleFile(file, {
+          ...fileCtx,
           tmpDir,
-          ocrLang,
-          toFormat: toFormat || "txt",
         });
-      } else if (operation === "translate") {
-        const fmt = fromFormat || path.extname(single.originalname).slice(1).toLowerCase();
-        const progressId = String(req.body?.progressId || "").trim();
-        if (progressId) {
-          setTranslateProgress(progressId, { phase: "extracting", done: 0, total: 0 });
-        }
-        try {
-          result = await translateFile({
-            buffer: single.buffer,
-            originalName: single.originalname,
-            fromFormat: fmt,
-            fromLang: translateFrom,
-            toLang: translateTo,
-            toFormat: toFormat || "txt",
-            onProgress: progressId
-              ? (p) => setTranslateProgress(progressId, p)
-              : undefined,
-          });
-        } finally {
-          if (progressId) clearTranslateProgress(progressId);
-        }
-      } else if (
-        operation === "convert" &&
-        isOcrInputFormat(fromFormat || path.extname(single.originalname).slice(1)) &&
-        ["txt", "docx"].includes(toFormat)
-      ) {
-        loggedOperation = "ocr";
-        result = await runOcr({
-          buffer: single.buffer,
-          originalName: single.originalname,
-          tmpDir,
-          ocrLang: ocrLang || "eng",
-          toFormat,
+        logAndSendFile(req, res, result, {
+          operation: loggedOperation,
+          fromFormat: fmt,
+          toFormat: toFormat || result.filename?.split(".").pop() || "",
+          fileName: file.originalname,
         });
-      } else {
-        if (!fromFormat || !toFormat) {
-          return res.status(400).json({ error: "fromFormat and toFormat are required" });
-        }
-        result = await convertFile({
-          buffer: single.buffer,
-          originalName: single.originalname,
-          fromFormat,
-          toFormat,
-          tmpDir,
-          options: { quality },
-        });
+        return;
       }
 
+      const result = await processBatchFiles(uploadFiles, fileCtx, tmpDir);
       logAndSendFile(req, res, result, {
-        operation: loggedOperation,
-        fromFormat: fromFormat || path.extname(single.originalname).slice(1).toLowerCase(),
+        operation,
+        fromFormat: resolvedFromFormat,
         toFormat: toFormat || result.filename?.split(".").pop() || "",
-        fileName: single.originalname,
+        fileName: `${uploadFiles.length} files`,
       });
     } catch (err) {
       sendError(res, err);
@@ -369,6 +332,139 @@ app.post("/api/fetch-url", async (req, res) => {
   }
 });
 
+function getUploadFiles(req) {
+  const multi = req.files?.files || [];
+  const single = req.files?.file?.[0];
+  if (multi.length > 0) return multi;
+  if (single) return [single];
+  return [];
+}
+
+function fileFormat(file, fallback = "") {
+  return path.extname(file.originalname).slice(1).toLowerCase() || fallback;
+}
+
+async function processSingleFile(file, ctx) {
+  const {
+    operation,
+    fromFormat,
+    toFormat,
+    quality,
+    ocrLang,
+    translateFrom,
+    translateTo,
+    wantsOcr,
+    tmpDir,
+    progressId,
+  } = ctx;
+  const fmt = fromFormat || fileFormat(file);
+  const baseName = path.basename(file.originalname, path.extname(file.originalname));
+  let loggedOperation = operation;
+  let result;
+
+  if (operation === "compress") {
+    if (fmt === "pdf") {
+      result = await compressPdf(file.buffer, baseName, quality);
+    } else if (["png", "jpg", "jpeg", "webp"].includes(fmt)) {
+      result = await compressImage(file.buffer, fmt, baseName, quality || 80);
+    } else {
+      throw new Error("Compress supports PDF, PNG, and JPG only");
+    }
+  } else if (operation === "extract") {
+    result = await extractZip(file.buffer, tmpDir);
+  } else if (wantsOcr) {
+    loggedOperation = "ocr";
+    result = await runOcr({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      tmpDir,
+      ocrLang,
+      toFormat: toFormat || "txt",
+    });
+  } else if (operation === "translate") {
+    if (progressId) {
+      setTranslateProgress(progressId, { phase: "extracting", done: 0, total: 0 });
+    }
+    try {
+      result = await translateFile({
+        buffer: file.buffer,
+        originalName: file.originalname,
+        fromFormat: fmt,
+        fromLang: translateFrom,
+        toLang: translateTo,
+        toFormat: toFormat || "txt",
+        onProgress: progressId ? (p) => setTranslateProgress(progressId, p) : undefined,
+      });
+    } finally {
+      if (progressId) clearTranslateProgress(progressId);
+    }
+  } else if (
+    operation === "convert" &&
+    isOcrInputFormat(fromFormat || fileFormat(file)) &&
+    (fromFormat || fileFormat(file)) !== "pdf" &&
+    ["txt", "docx"].includes(toFormat)
+  ) {
+    loggedOperation = "ocr";
+    result = await runOcr({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      tmpDir,
+      ocrLang: ocrLang || "eng",
+      toFormat,
+    });
+  } else {
+    if (!fromFormat || !toFormat) {
+      const err = new Error("fromFormat and toFormat are required");
+      err.status = 400;
+      throw err;
+    }
+    result = await convertFile({
+      buffer: file.buffer,
+      originalName: file.originalname,
+      fromFormat,
+      toFormat,
+      tmpDir,
+      options: { quality },
+    });
+  }
+
+  return { result, loggedOperation, fmt };
+}
+
+async function processBatchFiles(files, ctx, tmpDir) {
+  const outputs = [];
+  const progressId = String(ctx.progressId || "").trim();
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const subDir = path.join(tmpDir, `item-${i}`);
+    await fs.mkdir(subDir, { recursive: true });
+
+    if (ctx.operation === "translate" && progressId) {
+      setTranslateProgress(progressId, {
+        phase: "translating",
+        done: i,
+        total: files.length,
+      });
+    }
+
+    const perFileCtx = {
+      ...ctx,
+      tmpDir: subDir,
+      fromFormat: ctx.fromFormat || fileFormat(file),
+      progressId: files.length === 1 ? progressId : undefined,
+    };
+    const { result } = await processSingleFile(file, perFileCtx);
+    outputs.push(result);
+  }
+
+  if (progressId && files.length > 1) {
+    clearTranslateProgress(progressId);
+  }
+
+  return packBatchResults(outputs, ctx.baseName || "converted", tmpDir);
+}
+
 function sendFile(res, result) {
   res.setHeader("Content-Type", result.mimeType);
   res.setHeader("Content-Disposition", `attachment; filename="${result.filename}"`);
@@ -376,21 +472,26 @@ function sendFile(res, result) {
 }
 
 function logAndSendFile(req, res, result, meta) {
-  if (req.user?.id && meta) {
-    recordUserActivity({
-      userId: req.user.id,
-      operation: meta.operation,
-      fromFormat: meta.fromFormat,
-      toFormat: meta.toFormat,
-      fileName: meta.fileName,
-    });
+  if (meta) {
+    if (req.user?.id) {
+      recordUserActivity({
+        userId: req.user.id,
+        operation: meta.operation,
+        fromFormat: meta.fromFormat,
+        toFormat: meta.toFormat,
+        fileName: meta.fileName,
+      });
+    } else {
+      recordSuccessfulJob(req, res);
+    }
   }
   sendFile(res, result);
 }
 
 function sendError(res, err) {
   const message = err instanceof Error ? err.message : "Conversion failed";
-  res.status(400).json({ error: message });
+  const status = err.status && err.status >= 400 ? err.status : 400;
+  res.status(status).json({ error: message });
 }
 
 app.use(express.static(distPath));

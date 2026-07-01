@@ -327,17 +327,17 @@ function ProfileDashboard() {
                 <>
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard label={t("dashTotalConversions")} value={dashboard.stats.totalConversions} />
-                    <StatCard label={t("dashThisMonth")} value={dashboard.stats.thisMonth} accent="text-brand" />
+                    <StatCard label={t("dashToday")} value={dashboard.stats.usedToday} accent="text-brand" />
                     <StatCard label={t("dashOcrJobs")} value={dashboard.stats.ocrJobs} />
                     <StatCard label={t("dashTranslateJobs")} value={dashboard.stats.translateJobs} />
                   </div>
 
                   <div className="grid gap-6 lg:grid-cols-2">
                     <section className="modern-card p-6">
-                      <h2 className="mb-4 text-lg font-semibold">{t("dashUsageThisMonth")}</h2>
-                      <UsageBar used={dashboard.plan.usedThisMonth} limit={dashboard.plan.monthlyLimit} />
+                      <h2 className="mb-4 text-lg font-semibold">{t("dashUsageToday")}</h2>
+                      <UsageBar used={dashboard.plan.usedToday} limit={dashboard.plan.dailyLimit} />
                       <p className="mt-3 text-sm text-[rgb(var(--muted))]">
-                        {dashboard.plan.remainingThisMonth} {t("dashRemaining")} · {t("dashUnlimitedLocal")}
+                        {dashboard.plan.remainingToday} {t("dashRemaining")}
                       </p>
                     </section>
 
@@ -551,16 +551,16 @@ function ProfileDashboard() {
 
                   <div className="grid gap-6 lg:grid-cols-2">
                     <section className="modern-card p-6">
-                      <h3 className="mb-4 font-semibold">{t("dashUsageThisMonth")}</h3>
-                      <UsageBar used={dashboard.plan.usedThisMonth} limit={dashboard.plan.monthlyLimit} />
+                      <h3 className="mb-4 font-semibold">{t("dashUsageToday")}</h3>
+                      <UsageBar used={dashboard.plan.usedToday} limit={dashboard.plan.dailyLimit} />
                       <ul className="mt-4 space-y-2 text-sm text-[rgb(var(--muted))]">
                         <li className="flex justify-between">
-                          <span>{t("dashMonthlyLimit")}</span>
-                          <span className="text-[rgb(var(--foreground))]">{dashboard.plan.monthlyLimit}</span>
+                          <span>{t("dashDailyLimit")}</span>
+                          <span className="text-[rgb(var(--foreground))]">{dashboard.plan.dailyLimit}</span>
                         </li>
                         <li className="flex justify-between">
                           <span>{t("dashRemaining")}</span>
-                          <span className="text-[rgb(var(--foreground))]">{dashboard.plan.remainingThisMonth}</span>
+                          <span className="text-[rgb(var(--foreground))]">{dashboard.plan.remainingToday}</span>
                         </li>
                         <li className="flex justify-between">
                           <span>{t("dashMaxFileSize")}</span>

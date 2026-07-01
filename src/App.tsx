@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Header from "./components/Header";
 import ConverterHero from "./components/ConverterHero";
 import UploadZone from "./components/UploadZone";
@@ -22,6 +22,7 @@ interface AppProps {
   tool?: ToolDef;
 }
 
+const HOME_FORMAT_INITIAL_HOLD_MS = 10_000;
 const HOME_FORMAT_ROTATE_MS = 3800;
 
 export default function App({ tool }: AppProps) {
@@ -37,6 +38,13 @@ export default function App({ tool }: AppProps) {
   const [activeCategory, setActiveCategory] = useState<FormatCategory>(activeTool.category || "document");
   const [formatAutoRotate, setFormatAutoRotate] = useState(isHome);
   const [formatPickerOpen, setFormatPickerOpen] = useState(false);
+  const formatPickerOpenRef = useRef(formatPickerOpen);
+  const fromFormatRef = useRef(fromFormat);
+  const toFormatRef = useRef(toFormat);
+
+  formatPickerOpenRef.current = formatPickerOpen;
+  fromFormatRef.current = fromFormat;
+  toFormatRef.current = toFormat;
 
   useEffect(() => {
     setFromFormat(activeTool.defaultFrom || "pdf");
@@ -50,21 +58,29 @@ export default function App({ tool }: AppProps) {
   }, [activeTool.id]);
 
   useEffect(() => {
-    if (!isHome || selectedFiles.length > 0 || !formatAutoRotate || formatPickerOpen) return;
+    if (!isHome || selectedFiles.length > 0 || !formatAutoRotate) return;
 
     const rotate = () => {
-      const pair = pickRandomConversionPair();
+      if (formatPickerOpenRef.current) return;
+      const pair = pickRandomConversionPair({
+        from: fromFormatRef.current,
+        to: toFormatRef.current,
+      });
       setFromFormat(pair.from);
       setToFormat(pair.to);
     };
 
-    const initial = window.setTimeout(rotate, 2200);
-    const interval = window.setInterval(rotate, HOME_FORMAT_ROTATE_MS);
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+    const initialTimer = window.setTimeout(() => {
+      rotate();
+      intervalId = window.setInterval(rotate, HOME_FORMAT_ROTATE_MS);
+    }, HOME_FORMAT_INITIAL_HOLD_MS);
+
     return () => {
-      window.clearTimeout(initial);
-      window.clearInterval(interval);
+      window.clearTimeout(initialTimer);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
     };
-  }, [isHome, selectedFiles.length, formatAutoRotate, formatPickerOpen]);
+  }, [isHome, selectedFiles.length, formatAutoRotate]);
 
   const pauseFormatAutoRotate = useCallback(() => {
     setFormatAutoRotate(false);
@@ -122,52 +138,90 @@ export default function App({ tool }: AppProps) {
       : activeTool.description || `Use the ${activeTool.label} to transform your files online.`;
 
   return (
-    <div className="page-shell flex min-h-screen flex-col">
-      <Header />
+    <div className={`page-shell flex min-h-screen flex-col ${isHome ? "home-page" : ""}`}>
+      {isHome ? (
+        <>
+          <div className="home-hero-stage pb-20 md:pb-28">
+            <Header heroBand />
+            <div className="mx-auto w-full max-w-6xl px-4 pt-10">
+              <ConverterHero
+                title={title}
+                subtitle={subtitle}
+                fromFormat={fromFormat}
+                toFormat={toFormat}
+                operation={operation}
+                onFromChange={handleFromFormatChange}
+                onToChange={handleToFormatChange}
+                onOperationChange={setOperation}
+                hideFormatPickers={operation !== "convert"}
+                hasFiles={selectedFiles.length > 0}
+                onPickerOpenChange={setFormatPickerOpen}
+                onFormatInteraction={pauseFormatAutoRotate}
+              />
+            </div>
+          </div>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-10">
-        <ConverterHero
-          title={title}
-          subtitle={subtitle}
-          fromFormat={fromFormat}
-          toFormat={toFormat}
-          operation={operation}
-          onFromChange={handleFromFormatChange}
-          onToChange={handleToFormatChange}
-          onOperationChange={setOperation}
-          hideFormatPickers={operation !== "convert"}
-          hasFiles={selectedFiles.length > 0}
-          onPickerOpenChange={setFormatPickerOpen}
-          onFormatInteraction={pauseFormatAutoRotate}
-        />
-        <UploadZone
-          operation={operation}
-          fromFormat={fromFormat}
-          toFormat={toFormat}
-          selectedFiles={selectedFiles}
-          onFilesSelect={handleFilesSelect}
-          status={status}
-          error={error}
-          onStatusChange={setStatus}
-          onError={setError}
-          onToFormatChange={handleToFormatChange}
-        />
-        {activeTool.id === "home" ? (
-          <>
-            <CategoryBrowser
-              activeCategory={activeCategory}
-              onCategoryChange={setActiveCategory}
-              onFormatSelect={(f) => handleFormatLink(f, "any")}
-              onConversionSelect={handleFormatLink}
+          <div className="home-body-stage">
+            <div className="mx-auto w-full max-w-6xl px-4 pb-16">
+              <UploadZone
+                operation={operation}
+                fromFormat={fromFormat}
+                toFormat={toFormat}
+                selectedFiles={selectedFiles}
+                onFilesSelect={handleFilesSelect}
+                status={status}
+                error={error}
+                onStatusChange={setStatus}
+                onError={setError}
+                onToFormatChange={handleToFormatChange}
+                overlapHero
+              />
+              <CategoryBrowser
+                activeCategory={activeCategory}
+                onCategoryChange={setActiveCategory}
+                onFormatSelect={(f) => handleFormatLink(f, "any")}
+                onConversionSelect={handleFormatLink}
+              />
+              <SecuritySection />
+            </div>
+            <FilesCounter />
+            <Footer />
+          </div>
+        </>
+      ) : (
+        <>
+          <Header />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-16 pt-10">
+            <ConverterHero
+              title={title}
+              subtitle={subtitle}
+              fromFormat={fromFormat}
+              toFormat={toFormat}
+              operation={operation}
+              onFromChange={handleFromFormatChange}
+              onToChange={handleToFormatChange}
+              onOperationChange={setOperation}
+              hideFormatPickers={operation !== "convert"}
+              hasFiles={selectedFiles.length > 0}
+              onPickerOpenChange={setFormatPickerOpen}
+              onFormatInteraction={pauseFormatAutoRotate}
             />
-            <SecuritySection />
-          </>
-        ) : null}
-      </main>
-
-      {activeTool.id === "home" ? <FilesCounter /> : null}
-
-      <Footer />
+            <UploadZone
+              operation={operation}
+              fromFormat={fromFormat}
+              toFormat={toFormat}
+              selectedFiles={selectedFiles}
+              onFilesSelect={handleFilesSelect}
+              status={status}
+              error={error}
+              onStatusChange={setStatus}
+              onError={setError}
+              onToFormatChange={handleToFormatChange}
+            />
+          </main>
+          <Footer />
+        </>
+      )}
     </div>
   );
 }

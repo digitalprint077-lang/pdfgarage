@@ -13,24 +13,39 @@ import PptxGenJS from "pptxgenjs";
 import ExcelJS from "exceljs";
 import { promisify } from "util";
 import { convertPdfToDocxEditable, convertDocxToDoc } from "./pdf2docx.js";
-import { renderPdfToPngPages, PDF_RENDER_SCALE } from "./pdfRender.js";
-import {
-  convertWithFfmpeg,
-  extractAudioFromVideo,
-  isMediaFormat,
-  isAudioOnly,
-  isVideoFormat,
-  getMediaMime,
-  findFfmpeg,
-  resolveOutputFilename,
-} from "./mediaConvert.js";
+import { renderPdfToPngPages, PDF_RENDER_SCALE, PDF_IMAGE_ENCODE, extractTextFromPdfBuffer } from "./pdfRender.js";
+import { isArchiveFormat, convertArchiveFormat } from "./archiveTools.js";
 
 const libreConvert = promisify(libre.convert);
 
-const IMAGE_FORMATS = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff", "tif", "ico", "heic", "avif"]);
+const IMAGE_FORMATS = new Set([
+  "3fr", "arw", "avif", "bmp", "cr2", "cr3", "crw", "dcr", "dng", "eps", "erf", "gif", "heic", "heif",
+  "icns", "ico", "jfif", "jpeg", "jpg", "mos", "mrw", "nef", "odd", "odg", "orf", "pef", "png", "ppm",
+  "ps", "psb", "psd", "pub", "raf", "raw", "rw2", "tga", "tif", "tiff", "webp", "x3f", "xcf", "xps",
+]);
+const VECTOR_FORMATS = new Set([
+  "ai", "cdr", "cgm", "emf", "sk", "sk1", "svg", "svgz", "vsd", "wmf",
+]);
+const EBOOK_FORMATS = new Set([
+  "azw", "azw3", "azw4", "cbc", "cbr", "cbz", "chm", "epub", "fb2", "htmlz",
+  "lit", "lrf", "mobi", "oeb", "pdb", "pml", "prc", "rb", "snb", "tcr", "txtz",
+]);
+const PRESENTATION_FORMATS = new Set([
+  "dps", "key", "odp", "pot", "potx", "pps", "ppsx", "ppt", "pptm", "pptx", "sda",
+]);
+const DOCUMENT_FORMATS = new Set([
+  "abw", "djvu", "doc", "docm", "docx", "dot", "dotx", "html", "hwp", "hwpx", "lwp", "md", "odt",
+  "pages", "pdf", "rst", "rtf", "sdw", "tex", "txt", "wpd", "wps", "zabw",
+]);
+const WORD_DOCUMENT_FORMATS = new Set(["doc", "docx", "docm", "dot", "dotx"]);
+const CAD_FORMATS = new Set(["dwf", "dwg", "dxf"]);
 const OFFICE_FORMATS = new Set([
-  "doc", "docx", "docm", "dotx", "ppt", "pptx", "xls", "xlsx", "csv", "odt", "odp", "ods", "rtf",
-  "html", "htm", "txt", "md", "epub", "mobi", "azw3", "pages", "wps", "abw",
+  ...PRESENTATION_FORMATS,
+  ...EBOOK_FORMATS,
+  ...VECTOR_FORMATS,
+  ...CAD_FORMATS,
+  ...[...DOCUMENT_FORMATS].filter((f) => f !== "pdf"),
+  "xls", "xlsx", "csv", "ods",
 ]);
 const PDF_TO_OFFICE = new Set(["docx", "doc", "pptx", "ppt", "xlsx", "xls", "odt", "odp", "ods", "rtf"]);
 
@@ -43,21 +58,59 @@ const MIME = {
   gif: "image/gif",
   bmp: "image/bmp",
   tiff: "image/tiff",
+  tif: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
+  psd: "image/vnd.adobe.photoshop",
+  psb: "application/vnd.3gpp.pic-bw-large",
+  eps: "application/postscript",
+  icns: "image/icns",
+  tga: "image/tga",
+  xps: "application/vnd.ms-xpsdocument",
   txt: "text/plain",
   md: "text/markdown",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   doc: "application/msword",
+  dot: "application/msword",
+  djvu: "image/vnd.djvu",
+  hwp: "application/x-hwp",
+  hwpx: "application/hwp+zip",
+  wpd: "application/vnd.wordperfect",
+  pages: "application/x-iwork-pages-sffpages",
+  abw: "application/x-abiword",
+  zabw: "application/x-abiword-compressed",
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ppt: "application/vnd.ms-powerpoint",
+  pptm: "application/vnd.ms-powerpoint.presentation.macroEnabled.12",
+  pps: "application/vnd.ms-powerpoint",
+  ppsx: "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  pot: "application/vnd.ms-powerpoint",
+  potx: "application/vnd.openxmlformats-officedocument.presentationml.template",
+  odp: "application/vnd.oasis.opendocument.presentation",
+  dps: "application/octet-stream",
+  key: "application/x-iwork-keynote-sffkey",
+  sda: "application/vnd.stardivision.draw",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   xls: "application/vnd.ms-excel",
   rtf: "application/rtf",
   csv: "text/csv",
   epub: "application/epub+zip",
-  mp3: "audio/mpeg",
-  mp4: "video/mp4",
-  webm: "video/webm",
+  mobi: "application/x-mobipocket-ebook",
+  azw: "application/vnd.amazon.ebook",
+  azw3: "application/vnd.amazon.mobi8-ebook",
+  azw4: "application/vnd.amazon.mobi8-ebook",
+  fb2: "application/x-fictionbook+xml",
+  chm: "application/vnd.ms-htmlhelp",
+  cbr: "application/x-cbr",
+  cbz: "application/x-cbz",
   svg: "image/svg+xml",
+  svgz: "image/svg+xml",
+  emf: "image/emf",
+  wmf: "image/wmf",
+  cgm: "image/cgm",
+  ai: "application/postscript",
+  cdr: "application/vnd.corel-draw",
+  vsd: "application/vnd.visio",
   zip: "application/zip",
 };
 
@@ -82,12 +135,8 @@ export async function convertFile({ buffer, originalName, fromFormat, toFormat, 
     return convertSvgToRaster(buffer, baseName, to);
   }
 
-  if (isVideoFormat(from) && isAudioOnly(to)) {
-    return videoToAudio(buffer, baseName, from, to, tmpDir);
-  }
-
-  if (isMediaFormat(from) && isMediaFormat(to)) {
-    return convertMedia(buffer, baseName, from, to, tmpDir);
+  if (from === "svgz" && IMAGE_FORMATS.has(to)) {
+    return convertSvgToRaster(buffer, baseName, to);
   }
 
   if (IMAGE_FORMATS.has(from) && (to === "txt" || to === "md" || to === "docx")) {
@@ -102,6 +151,10 @@ export async function convertFile({ buffer, originalName, fromFormat, toFormat, 
 
   if (OFFICE_FORMATS.has(from) || OFFICE_FORMATS.has(to)) {
     return libreOfficeConvert(buffer, baseName, `.${from}`, `.${to}`);
+  }
+
+  if (isArchiveFormat(from) && isArchiveFormat(to)) {
+    return convertArchiveFormat(buffer, baseName, from, to, tmpDir);
   }
 
   throw new Error(`Conversion from ${from.toUpperCase()} to ${to.toUpperCase()} is not supported yet`);
@@ -128,26 +181,6 @@ async function convertSvgToRaster(buffer, baseName, to) {
   const ext = to === "jpeg" ? "jpg" : to;
   return { buffer: out, filename: `${baseName}.${ext}`, mimeType: MIME[ext] || MIME.png };
 }
-
-async function convertMedia(buffer, baseName, from, to, tmpDir) {
-  const inPath = path.join(tmpDir, `input.${from}`);
-  const outPath = path.join(tmpDir, `output.${to}`);
-  await fs.writeFile(inPath, buffer);
-  const out = await convertWithFfmpeg(inPath, outPath, { toFormat: to });
-  const filename = resolveOutputFilename(`${baseName}.${to}`, to);
-  return { buffer: out, filename, mimeType: getMediaMime(to) };
-}
-
-async function videoToAudio(buffer, baseName, from, to, tmpDir) {
-  const inPath = path.join(tmpDir, `input.${from}`);
-  const outPath = path.join(tmpDir, `output.${to}`);
-  await fs.writeFile(inPath, buffer);
-  const out = await extractAudioFromVideo(inPath, outPath, to);
-  const filename = resolveOutputFilename(`${baseName}.${to}`, to);
-  return { buffer: out, filename, mimeType: getMediaMime(to) };
-}
-
-export { findFfmpeg };
 
 async function convertFromPdf(buffer, baseName, toFormat, tmpDir) {
   if (IMAGE_FORMATS.has(toFormat)) {
@@ -194,12 +227,24 @@ async function convertToPdf(buffer, baseName, fromFormat, tmpDir) {
     return textToPdf(buffer, baseName);
   }
 
-  if (fromFormat === "docx" || fromFormat === "doc") {
+  if (WORD_DOCUMENT_FORMATS.has(fromFormat)) {
     return docxToPdf(buffer, baseName, fromFormat);
   }
 
-  if (fromFormat === "pptx" || fromFormat === "ppt") {
-    return pptxToPdf(buffer, baseName);
+  if (PRESENTATION_FORMATS.has(fromFormat)) {
+    return presentationToPdf(buffer, baseName, fromFormat);
+  }
+
+  if (EBOOK_FORMATS.has(fromFormat)) {
+    return ebookToPdf(buffer, baseName, fromFormat);
+  }
+
+  if (VECTOR_FORMATS.has(fromFormat)) {
+    return vectorToPdf(buffer, baseName, fromFormat);
+  }
+
+  if (CAD_FORMATS.has(fromFormat)) {
+    return cadToPdf(buffer, baseName, fromFormat);
   }
 
   if (fromFormat === "xlsx" || fromFormat === "xls") {
@@ -218,13 +263,38 @@ async function convertToPdf(buffer, baseName, fromFormat, tmpDir) {
 }
 
 async function pdfToText(buffer, baseName, toFormat) {
-  const data = await pdfParse(buffer);
-  const text = data.text || "";
-  return {
-    buffer: Buffer.from(text, "utf-8"),
-    filename: `${baseName}.${toFormat}`,
-    mimeType: MIME[toFormat],
-  };
+  try {
+    const data = await pdfParse(buffer);
+    const text = (data.text || "").trim();
+    if (text) {
+      return {
+        buffer: Buffer.from(text, "utf-8"),
+        filename: `${baseName}.${toFormat}`,
+        mimeType: MIME[toFormat],
+      };
+    }
+  } catch {
+    /* pdf-parse can fail on some PDF generators */
+  }
+
+  try {
+    const text = (await extractTextFromPdfBuffer(buffer)).trim();
+    if (text) {
+      return {
+        buffer: Buffer.from(text, "utf-8"),
+        filename: `${baseName}.${toFormat}`,
+        mimeType: MIME[toFormat],
+      };
+    }
+  } catch {
+    /* fall through */
+  }
+
+  try {
+    return await libreOfficeConvert(buffer, baseName, ".pdf", `.${toFormat}`);
+  } catch {
+    throw new Error("Could not extract text from this PDF. Try PDF OCR for scanned documents.");
+  }
 }
 
 async function pdfToDoc(buffer, baseName, tmpDir) {
@@ -373,12 +443,59 @@ async function pdfToXlsx(buffer, baseName) {
   }
 }
 
-async function pptxToPdf(buffer, baseName) {
+async function cadToPdf(buffer, baseName, fromFormat) {
+  const ext = fromFormat.toLowerCase();
   try {
-    return await libreOfficeConvert(buffer, baseName, ".pptx", ".pdf");
+    return await libreOfficeConvert(buffer, baseName, `.${ext}`, ".pdf");
   } catch {
-    const text = await extractTextFromOfficeZip(buffer, "ppt/slides/slide");
-    return textToPdf(Buffer.from(text || "Empty presentation", "utf-8"), baseName);
+    throw new Error(
+      `Could not convert ${ext.toUpperCase()} to PDF. Install LibreOffice for CAD format support.`
+    );
+  }
+}
+
+async function vectorToPdf(buffer, baseName, fromFormat) {
+  const ext = fromFormat.toLowerCase();
+  if (ext === "svg" || ext === "svgz") {
+    try {
+      const png = await sharp(buffer).png().toBuffer();
+      return imagesToPdf([png], baseName);
+    } catch {
+      /* fall through to LibreOffice */
+    }
+  }
+  try {
+    return await libreOfficeConvert(buffer, baseName, `.${ext}`, ".pdf");
+  } catch {
+    throw new Error(
+      `Could not convert ${ext.toUpperCase()} to PDF. Install LibreOffice or Inkscape for vector format support.`
+    );
+  }
+}
+
+async function ebookToPdf(buffer, baseName, fromFormat) {
+  const ext = fromFormat.toLowerCase();
+  try {
+    return await libreOfficeConvert(buffer, baseName, `.${ext}`, ".pdf");
+  } catch {
+    throw new Error(
+      `Could not convert ${ext.toUpperCase()} to PDF. Install LibreOffice or Calibre for full e-book support.`
+    );
+  }
+}
+
+async function presentationToPdf(buffer, baseName, fromFormat) {
+  const ext = fromFormat.toLowerCase();
+  try {
+    return await libreOfficeConvert(buffer, baseName, `.${ext}`, ".pdf");
+  } catch {
+    if (["pptx", "pptm", "ppsx", "potx"].includes(ext)) {
+      const text = await extractTextFromOfficeZip(buffer, "ppt/slides/slide");
+      return textToPdf(Buffer.from(text || "Empty presentation", "utf-8"), baseName);
+    }
+    throw new Error(
+      `Could not convert ${ext.toUpperCase()} to PDF. Install LibreOffice for full slide support.`
+    );
   }
 }
 
@@ -467,13 +584,22 @@ async function getPdfImagePageBuffers(buffer, format, tmpDir, workId = "default"
   const pages = [];
 
   for (const page of pngPages) {
-    let imgBuffer = page;
+    const image = sharp(page);
+    let imgBuffer;
     if (normalized === "jpeg") {
-      imgBuffer = await sharp(page).jpeg({ quality: 95, mozjpeg: true }).toBuffer();
+      imgBuffer = await image.jpeg(PDF_IMAGE_ENCODE.jpeg).toBuffer();
     } else if (normalized === "webp") {
-      imgBuffer = await sharp(page).webp({ quality: 92 }).toBuffer();
-    } else if (normalized !== "png") {
-      imgBuffer = await sharp(page)[normalized]().toBuffer();
+      imgBuffer = await image.webp(PDF_IMAGE_ENCODE.webp).toBuffer();
+    } else if (normalized === "png") {
+      imgBuffer = await image.png(PDF_IMAGE_ENCODE.png).toBuffer();
+    } else if (normalized === "avif") {
+      imgBuffer = await image.avif(PDF_IMAGE_ENCODE.avif).toBuffer();
+    } else if (normalized === "heic") {
+      imgBuffer = await image.heic(PDF_IMAGE_ENCODE.heic).toBuffer();
+    } else if (normalized === "tiff") {
+      imgBuffer = await image.tiff(PDF_IMAGE_ENCODE.tiff).toBuffer();
+    } else {
+      imgBuffer = await image.toFormat(normalized, { quality: 100 }).toBuffer();
     }
     pages.push(imgBuffer);
   }
@@ -525,6 +651,38 @@ async function createZipFromNamedEntries(zipPath, entries) {
     }
     archive.finalize();
   });
+}
+
+export async function packBatchResults(entries, zipBaseName, tmpDir) {
+  if (!entries.length) {
+    throw new Error("No output files produced");
+  }
+
+  const normalized = dedupeEntryNames(
+    entries.map((entry) => ({
+      name: entry.filename || entry.name,
+      buffer: entry.buffer,
+    }))
+  );
+
+  if (normalized.length === 1) {
+    const match =
+      entries.find((entry) => (entry.filename || entry.name) === normalized[0].name) || entries[0];
+    return {
+      buffer: normalized[0].buffer,
+      filename: normalized[0].name,
+      mimeType: match.mimeType || "application/octet-stream",
+    };
+  }
+
+  const zipPath = path.join(tmpDir, "batch-output.zip");
+  await createZipFromNamedEntries(zipPath, normalized);
+  const zipBuffer = await fs.readFile(zipPath);
+  return {
+    buffer: zipBuffer,
+    filename: `${zipBaseName}.zip`,
+    mimeType: MIME.zip,
+  };
 }
 
 export async function batchPdfToImages(files, toFormat, tmpDir, zipBaseName = "converted") {

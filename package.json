@@ -10,8 +10,6 @@
     "build": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
-    "test:media": "node server/testMediaConversions.js",
-    "test:media:deep": "node server/testMediaConversions.js --deep",
     "test:translate": "node server/testTranslate.js",
     "setup:python": "pip install -r requirements.txt"
   },

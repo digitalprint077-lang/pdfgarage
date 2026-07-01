@@ -76,11 +76,8 @@ function computePosition(btn: HTMLButtonElement, optionCount: number) {
 
 
 
-  return { top, left, width, maxHeight };
-
+  return { top, left, width, maxHeight, openUp };
 }
-
-
 
 export default function SelectDropdown({
 
@@ -102,7 +99,7 @@ export default function SelectDropdown({
 
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 160, maxHeight: 320 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 160, maxHeight: 320, openUp: false });
 
 
 
@@ -266,7 +263,9 @@ export default function SelectDropdown({
 
             }}
 
-            className="fixed z-[200] overflow-y-auto overscroll-contain rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1 shadow-soft picker-scroll"
+            className={`fixed z-[200] overflow-y-auto overscroll-contain rounded-xl border border-[rgb(var(--border))] bg-[rgb(var(--card))] p-1 shadow-soft picker-scroll animate-dropdown-scale-in ${
+              pos.openUp ? "origin-bottom" : "origin-top"
+            }`}
 
           >
 

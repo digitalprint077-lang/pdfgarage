@@ -1,7 +1,5 @@
 import db from "./db.js";
-
-const FREE_MONTHLY_LIMIT = 100;
-const FREE_MAX_FILE_MB = 100;
+import { FREE_DAILY_LIMIT, FREE_MAX_FILE_MB, getUserDailyUsage } from "./usageLimits.js";
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS user_activity (
@@ -50,6 +48,8 @@ export function getUserDashboard(userId, userEmail, userRow) {
          AND created_at >= datetime('now', 'start of month')`
       )
       .get(userId)?.c ?? 0;
+
+  const usedToday = getUserDailyUsage(userId);
 
   const ocrJobs =
     db
@@ -101,15 +101,16 @@ export function getUserDashboard(userId, userEmail, userRow) {
     stats: {
       totalConversions,
       thisMonth,
+      usedToday,
       ocrJobs,
       translateJobs,
       mergeJobs,
     },
     plan: {
       name: "Free",
-      monthlyLimit: FREE_MONTHLY_LIMIT,
-      usedThisMonth: thisMonth,
-      remainingThisMonth: Math.max(0, FREE_MONTHLY_LIMIT - thisMonth),
+      dailyLimit: FREE_DAILY_LIMIT,
+      usedToday,
+      remainingToday: Math.max(0, FREE_DAILY_LIMIT - usedToday),
       maxFileSizeMb: FREE_MAX_FILE_MB,
     },
     recentActivity: recentRows.map(mapActivityRow),
@@ -124,4 +125,4 @@ export function getUserDashboard(userId, userEmail, userRow) {
   };
 }
 
-export { FREE_MONTHLY_LIMIT, FREE_MAX_FILE_MB };
+export { FREE_DAILY_LIMIT, FREE_MAX_FILE_MB };

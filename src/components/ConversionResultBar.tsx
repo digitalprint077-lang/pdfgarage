@@ -45,7 +45,7 @@ function DownloadMenu({ onDownload, onPreview, canPreview }: DownloadMenuProps) 
     <div
       ref={panelRef}
       style={{ top: menuPos.top, left: menuPos.left, width: 160 }}
-      className="fixed z-[300] overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] py-1 shadow-soft"
+      className="fixed z-[300] origin-top overflow-hidden rounded-lg border border-[rgb(var(--border))] bg-[rgb(var(--card))] py-1 shadow-soft animate-dropdown-scale-in"
     >
       {canPreview ? (
         <button

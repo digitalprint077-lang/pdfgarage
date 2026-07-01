@@ -1,5 +1,5 @@
 export default function FormatIcon({ format, small }: { format: string; small?: boolean }) {
-  const size = small ? "h-4 w-4" : "h-7 w-7 sm:h-8 sm:w-8";
+  const size = small ? "h-4 w-4" : "h-7 w-7";
   const isPdf = format === "pdf";
   const isAny = format === "any";
 

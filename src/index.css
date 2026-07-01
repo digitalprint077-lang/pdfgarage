@@ -16,11 +16,11 @@
     --format-card-text: 250 250 250;
 
     --sync-bg: 255 255 255;
-    --sync-bg-bright: 254 242 242;
-    --sync-border: 252 165 165;
-    --sync-border-dim: 254 202 202;
-    --sync-glow: 239 68 68;
-    --sync-icon: 244 63 94;
+    --sync-bg-bright: 238 242 255;
+    --sync-border: 129 140 248;
+    --sync-border-dim: 165 180 252;
+    --sync-glow: 99 102 241;
+    --sync-icon: 99 102 241;
     --sync-line: 212 212 216;
 
     --picker-surface: 255 255 255;
@@ -41,13 +41,13 @@
     --format-card-hover: 38 38 38;
     --format-card-text: 250 250 250;
 
-    --sync-bg: 42 26 26;
-    --sync-bg-bright: 68 34 34;
-    --sync-border: 240 128 128;
-    --sync-border-dim: 100 55 55;
-    --sync-glow: 240 128 128;
-    --sync-icon: 240 128 128;
-    --sync-line: 80 50 50;
+    --sync-bg: 30 27 75;
+    --sync-bg-bright: 49 46 129;
+    --sync-border: 129 140 248;
+    --sync-border-dim: 67 56 202;
+    --sync-glow: 99 102 241;
+    --sync-icon: 129 140 248;
+    --sync-line: 63 63 90;
 
     --picker-surface: 28 28 28;
     --picker-inset: 18 18 18;
@@ -57,6 +57,30 @@
 
   html {
     scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none;
+      mix-blend-mode: normal;
+    }
+
+    ::view-transition-old(root) {
+      z-index: 1;
+    }
+
+    ::view-transition-new(root) {
+      z-index: 9999;
+      clip-path: circle(0px at var(--theme-x, 50vw) var(--theme-y, 50vh));
+      animation: theme-circle-reveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    }
+
+    @keyframes theme-circle-reveal {
+      to {
+        clip-path: circle(var(--theme-radius, 150vmax) at var(--theme-x, 50vw) var(--theme-y, 50vh));
+      }
+    }
   }
 
   body {
@@ -92,6 +116,54 @@
 
   .glass-nav {
     @apply sticky top-0 z-[100] border-b border-[rgb(var(--border)/0.5)] bg-[rgb(var(--page)/0.75)] backdrop-blur-xl backdrop-saturate-150;
+  }
+
+  :root:not(.dark) .home-page.page-shell::before {
+    display: none;
+  }
+
+  :root:not(.dark) .home-page .home-hero-stage {
+    --foreground: 250 250 250;
+    --muted: 161 161 170;
+    --border: 63 63 70;
+
+    position: relative;
+    color: rgb(var(--foreground));
+    background-color: rgb(24 24 27);
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+      radial-gradient(ellipse 80% 60% at 50% -20%, rgb(99 102 241 / 0.14), transparent);
+    background-size: 48px 48px, 48px 48px, auto;
+  }
+
+  :root:not(.dark) .home-page .home-body-stage {
+    @apply flex-1 bg-[rgb(var(--page))] text-[rgb(var(--foreground))];
+  }
+
+  :root:not(.dark) .home-page .glass-nav-hero {
+    border-color: rgb(255 255 255 / 0.08);
+    background-color: rgb(24 24 27 / 0.82);
+  }
+
+  :root:not(.dark) .home-page .glass-nav-hero .nav-link {
+    @apply text-zinc-400 hover:text-white;
+  }
+
+  :root:not(.dark) .home-page .glass-nav-hero .nav-link-active {
+    @apply bg-white/10 text-white;
+  }
+
+  :root:not(.dark) .home-page .glass-nav-hero .btn-ghost {
+    @apply text-zinc-400 hover:bg-white/10 hover:text-white;
+  }
+
+  :root:not(.dark) .home-page .glass-nav-hero .hero-logo-text {
+    @apply text-white;
+  }
+
+  .home-upload-overlap {
+    @apply relative z-10 -mt-16 md:-mt-20;
   }
 
   .modern-card {
@@ -266,5 +338,42 @@
   .google-signin-host iframe {
     width: 100% !important;
     max-width: 100% !important;
+  }
+
+  .dropdown-popover {
+    opacity: 0;
+    transform: scale(0.95);
+    transition:
+      opacity 100ms ease-out,
+      transform 100ms ease-out;
+    will-change: opacity, transform;
+  }
+
+  .dropdown-popover[data-state="open"] {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .dropdown-popover[data-state="closed"] {
+    opacity: 0;
+    transform: scale(0.95);
+    transition:
+      opacity 100ms ease-in,
+      transform 100ms ease-in;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dropdown-popover,
+    .dropdown-popover[data-state="open"],
+    .dropdown-popover[data-state="closed"] {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+
+    .animate-dropdown-scale-in,
+    .animate-dropdown-scale-out {
+      animation: none;
+    }
   }
 }
