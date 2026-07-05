@@ -1,3 +1,5 @@
+import { apiUrl } from "./api";
+
 export interface DashboardActivity {
   id: number;
   operation: string;
@@ -36,14 +38,14 @@ export interface DashboardData {
 }
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  const res = await fetch("/api/auth/dashboard", { credentials: "include" });
+  const res = await fetch(apiUrl("/api/auth/dashboard"), { credentials: "include" });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not load dashboard");
   return data as DashboardData;
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  const res = await fetch("/api/auth/change-password", {
+  const res = await fetch(apiUrl("/api/auth/change-password"), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "provider": "node",
+  "packages": {
+    "node": "20",
+    "python": "3.12"
+  },
+  "buildAptPackages": [
+    "build-essential",
+    "libcairo2-dev",
+    "libpango1.0-dev",
+    "libjpeg-dev",
+    "libgif-dev",
+    "librsvg2-dev"
+  ],
+  "steps": {
+    "build": {
+      "commands": ["...", "pip install -r server/requirements.txt"]
+    }
+  },
+  "deploy": {
+    "startCommand": "node server/index.js",
+    "aptPackages": ["tesseract-ocr", "libreoffice-writer", "libreoffice-calc", "libreoffice-impress"]
+  }
+}

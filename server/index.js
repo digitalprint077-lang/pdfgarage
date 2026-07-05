@@ -36,7 +36,9 @@ const upload = multer({
 
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || true,
+    origin: process.env.CLIENT_ORIGIN
+      ? process.env.CLIENT_ORIGIN.split(",").map((s) => s.trim())
+      : process.env.APP_URL || true,
     credentials: true,
   })
 );

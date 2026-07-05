@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { apiUrl } from "../utils/api";
 
 export interface AuthUser {
   id: number;
@@ -22,7 +23,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 async function authFetch(path: string, options?: RequestInit) {
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     ...options,
     credentials: "include",
     headers: {

@@ -1,3 +1,5 @@
+import { apiUrl } from "./api";
+
 interface HealthData {
   ok?: boolean;
   libreOffice?: boolean;
@@ -41,7 +43,7 @@ export interface StatusData {
 }
 
 async function fetchJson<T>(url: string): Promise<T | null> {
-  const res = await fetch(url);
+  const res = await fetch(apiUrl(url));
   const type = res.headers.get("content-type") || "";
   if (!res.ok || !type.includes("application/json")) return null;
   try {
@@ -148,7 +150,11 @@ export async function loadStatusPageData(): Promise<StatusData> {
 
   const health = await fetchJson<HealthData>("/api/health");
   if (!health) {
-    throw new Error("Could not reach the API. Run npm run dev and refresh.");
+    throw new Error(
+      import.meta.env.VITE_API_URL
+        ? "Could not reach the API server. Check VITE_API_URL and that the backend is running."
+        : "Could not reach the API. Run npm run dev and refresh."
+    );
   }
 
   const translate = await fetchJson<TranslateStatus>("/api/translate/status");

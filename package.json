@@ -8,10 +8,15 @@
     "dev:client": "vite",
     "dev:server": "node server/index.js",
     "build": "vite build",
+    "build:prod": "vite build",
     "preview": "vite preview",
     "start": "node server/index.js",
+    "start:prod": "npm run build:prod && node server/index.js",
     "test:translate": "node server/testTranslate.js",
-    "setup:python": "pip install -r requirements.txt"
+    "setup:python": "pip install -r server/requirements.txt"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "dependencies": {
     "archiver": "^7.0.1",

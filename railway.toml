@@ -1,0 +1,11 @@
+[build]
+builder = "RAILPACK"
+
+[deploy]
+startCommand = "node server/index.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+
+[deploy.env]
+NODE_ENV = "production"

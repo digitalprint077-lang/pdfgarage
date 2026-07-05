@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import SitePageShell from "../components/SitePageShell";
 import { useAuth } from "../contexts/AuthContext";
+import { apiUrl } from "../utils/api";
 
 const SUBJECTS = [
   { value: "", label: "Please select a subject" },
@@ -38,7 +39,7 @@ export default function ContactPage() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/contact/config")
+    fetch(apiUrl("/api/contact/config"))
       .then((r) => r.json())
       .then((d) => {
         if (d.supportEmail) setSupportEmail(d.supportEmail);
@@ -60,7 +61,7 @@ export default function ContactPage() {
     setSuccess(null);
     setSubmitting(true);
     try {
-      const res = await fetch("/api/contact", {
+      const res = await fetch(apiUrl("/api/contact"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

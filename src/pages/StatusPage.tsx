@@ -172,7 +172,11 @@ export default function StatusPage() {
             <h1 className="text-2xl font-bold">Services unavailable</h1>
             <p className="mt-3 text-[rgb(var(--muted))]">{error}</p>
             <p className="mt-4 text-sm text-[rgb(var(--muted))]">
-              Run <code className="text-gray-400">npm run dev</code> and refresh.
+              {import.meta.env.VITE_API_URL ? (
+                <>Check that your API server is running and <code className="text-gray-400">VITE_API_URL</code> is set correctly on Vercel.</>
+              ) : (
+                <>Run <code className="text-gray-400">npm run dev</code> and refresh.</>
+              )}
             </p>
           </div>
         ) : data ? (

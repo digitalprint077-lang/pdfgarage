@@ -14,6 +14,7 @@ import {
   downloadConversionResult,
 } from "./ConversionResultBar";
 import { importFromCloud, isCloudConfigured } from "../utils/cloudImport";
+import { apiUrl } from "../utils/api";
 
 const OUTPUT_FORMAT_OPTIONS = [
   { code: "txt", label: "TXT" },
@@ -119,7 +120,7 @@ export default function UploadZone({
     onStatusChange("uploading");
     onError(null);
     try {
-      const res = await fetch("/api/fetch-url", {
+      const res = await fetch(apiUrl("/api/fetch-url"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: urlInput.trim() }),
@@ -183,7 +184,7 @@ export default function UploadZone({
     if (progressId) {
       pollTimer = setInterval(async () => {
         try {
-          const pr = await fetch(`/api/translate/progress/${progressId}`);
+          const pr = await fetch(apiUrl(`/api/translate/progress/${progressId}`));
           if (pr.ok) setTranslateProgress(await pr.json());
         } catch {
           /* ignore poll errors */
@@ -192,9 +193,10 @@ export default function UploadZone({
     }
 
     try {
-      const res = await fetch(`/api/convert?operation=${encodeURIComponent(operation)}`, {
+      const res = await fetch(apiUrl(`/api/convert?operation=${encodeURIComponent(operation)}`), {
         method: "POST",
         body: formData,
+        credentials: "include",
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Conversion failed" }));

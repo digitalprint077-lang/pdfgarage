@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { apiUrl } from "../utils/api";
 
 interface GoogleSignInButtonProps {
   disabled?: boolean;
@@ -14,13 +15,13 @@ export default function GoogleSignInButton({
   const [configured, setConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/config", { credentials: "include" })
+    fetch(apiUrl("/api/auth/config"), { credentials: "include" })
       .then((r) => r.json())
       .then((data: { google?: boolean }) => setConfigured(Boolean(data.google)))
       .catch(() => setConfigured(false));
   }, []);
 
-  const startUrl = `/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}&authPage=${authPage}`;
+  const startUrl = apiUrl(`/api/auth/google/start?returnTo=${encodeURIComponent(returnTo)}&authPage=${authPage}`);
 
   const startGoogle = () => {
     window.location.assign(startUrl);
